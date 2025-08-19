@@ -1,9 +1,8 @@
 // src/components/FairyTaleList.tsx
-import React, {useState} from 'react'
+import React from 'react'
 import FairyTaleCard from './FairyTaleCard'
-import StoryModal from './StoryModal'
+import {Link} from 'react-router-dom' // Link 컴포넌트 import
 
-// 동화 데이터의 타입을 정의합니다.
 type FairyTale = {
   id: number
   imageSrc: string
@@ -44,38 +43,21 @@ const myFairyTales: FairyTale[] = [
 ]
 
 const FairyTaleList: React.FC = () => {
-  const [modalOpen, setModalOpen] = useState(false)
-  const [selectedStory, setSelectedStory] = useState<FairyTale | null>(null)
-
-  const handleCardClick = (story: FairyTale) => {
-    setSelectedStory(story)
-    setModalOpen(true)
-  }
-
-  const handleCloseModal = () => {
-    setModalOpen(false)
-    setSelectedStory(null)
-  }
-
   return (
     <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
       <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 리스트</h3>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
         {myFairyTales.map(tale => (
-          <div key={tale.id} onClick={() => handleCardClick(tale)}>
+          <Link key={tale.id} to={`/story/${tale.id}`} className="cursor-pointer">
             <FairyTaleCard
-              id={tale.id}
               imageSrc={tale.imageSrc}
               title={tale.title}
               date={tale.date}
               subText={tale.subText}
             />
-          </div>
+          </Link>
         ))}
       </div>
-      {modalOpen && selectedStory && (
-        <StoryModal story={selectedStory} onClose={handleCloseModal} />
-      )}
     </section>
   )
 }
