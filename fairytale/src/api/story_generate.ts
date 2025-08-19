@@ -1,8 +1,12 @@
-import axios from 'axios'
+import api from "./index";
 
-const API_BASE = process.env.REACT_APP_API_BASE
-
-export async function generate(name: string, age: number, genre: string) {
-  const res = await axios.post(`${API_BASE}/generate`, {name, age, genre})
-  return res.data
+export async function generate(story: {
+  name: string;
+  age: number;
+  genre: string;
+  uid: number;
+  type: 2;
+}) {
+  const res = await api.post("/generate", story);
+  return res.data;
 }
