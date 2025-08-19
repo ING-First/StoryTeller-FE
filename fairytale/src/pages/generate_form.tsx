@@ -1,26 +1,50 @@
 import React, {useState} from 'react'
 import Header from '../components/Header'
-import Button from '../components/Button'
-import {useNavigate} from 'react-router-dom' // debug
+import { generate } from '../api/story_generate'
 
 const StoryForm = () => {
   const [characterName, setCharacterName] = useState('')
   const [age, setAge] = useState('')
   const [genre, setGenre] = useState('')
-  const handleSubmit = (event: React.FormEvent) => {
+  const [loading, setLoading] = useState(false)
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     console.log('폼 제출:', {characterName, age, genre})
 
-    // TODO: 여기에 폼 데이터를 서버로 보내는 로직을 추가합니다.
-    // 예: API 호출
-  }
-  // debug
-  const navigate = useNavigate()
-  const handleGenerateStory = () => {
-    console.log('버튼 클릭, 페이지 이동 시작')
-    // 다음 페이지로 이동
-    navigate('/generate_story') // 이동할 경로를 지정
-  }
+    if (!characterName) {
+      alert("주인공 이름을 입력해주세요.");
+      return;
+    }
+
+    if (!age) {
+      alert("나이를 입력해주세요.");
+      return;
+    }
+
+    if (!genre) {
+      alert("장르를 입력해주세요.");
+      return;
+    }
+
+    try {
+      setLoading(true)
+      const res = await generate({
+        name: characterName,
+        age: Number(age),
+        genre: genre,
+        uid: 1,
+        type: 2
+      });
+      console.log(res);
+      alert(res.message);
+      window.location.href = "/generate_story";
+    } catch (err: any) {
+      console.error(err);
+      alert("동화생성을 샐패했습니다.");
+    } finally {
+      setLoading(false)  // 로딩 종료
+    }
+  };
 
   return (
     <div className="min-h-screen bg-pink-50">
@@ -97,16 +121,23 @@ const StoryForm = () => {
 
             {/* 동화 생성하기 버튼 */}
             <div className="flex justify-center pt-8">
-              <button
-                // type="submit"
-                onClick={handleGenerateStory} // debug
-                className="font-pinkfong bg-pink-300 text-pink-800 text-3xl px-16 py-4 rounded-full font-bold shadow-md hover:bg-pink-400 transition-colors">
-                동화 생성하기
-              </button>
+              <input
+                type="submit"
+                className="font-pinkfong bg-pink-300 text-pink-800 text-3xl px-16 py-4 rounded-full font-bold shadow-md hover:bg-pink-400 transition-colors"
+                value={loading ? "생성 중..." : "동화 생성하기"}
+              />
             </div>
+            
           </form>
         </section>
       </div>
+      {/* 로딩 오버레이 */}
+      {loading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center z-50">
+          <div className="w-16 h-16 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin"></div>
+          <p className="mt-6 text-white text-xl font-bold">동화를 생성 중이에요...</p>
+        </div>
+      )}
     </div>
   )
 }
