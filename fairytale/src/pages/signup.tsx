@@ -59,7 +59,7 @@ const SignUpPage: React.FC = () => {
       window.location.href = "/login";
     } catch (err: any) {
       console.error(err);
-      alert(err.message);
+      alert("회원가입을 실패했습니다.");
     }
   };
 
