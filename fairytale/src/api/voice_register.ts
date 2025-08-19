@@ -1,8 +1,14 @@
-import axios from 'axios'
+import api from "./index";
 
-const API_BASE = process.env.REACT_APP_API_BASE
+export async function voice_register(voice: { uid: number; audio: File }) {
+  const formData = new FormData();
+  formData.append("uid", voice.uid.toString());
+  formData.append("audio", voice.audio);
 
-export async function voice_register(uid: number, audio: File) {
-  const res = await axios.post(`${API_BASE}/voices/register`, {uid, audio})
-  return res.data
+  const res = await api.post("/voices/register", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return res.data;
 }
