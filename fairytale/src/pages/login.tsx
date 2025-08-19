@@ -28,6 +28,13 @@ const LoginPage: React.FC = () => {
           />
         </div>
 
+        {/* Login Button */}
+        <button
+          type="submit"
+          className="w-full py-2 mt-6 font-bold text-white transition-colors duration-200 bg-pink-400 rounded-lg hover:bg-pink-500">
+          LOG IN
+        </button>
+
         {/* Links */}
         <div className="flex justify-center mt-6 space-x-6 text-sm text-gray-600">
           <a href="#" className="hover:text-pink-500">
