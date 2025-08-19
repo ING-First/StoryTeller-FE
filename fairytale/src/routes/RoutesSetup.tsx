@@ -14,7 +14,8 @@ export default function RoutesSetup() {
   return (
     <Routes>
       {/* <Route path="*" element={<NoMatch />} /> */}
-      <Route path="/" element={<Homepage />} />
+      <Route path="/profile" element={<Homepage />} />
+      <Route path="/" element={<ProfilePage />} />
       <Route path="/voice_register" element={<VoiceRegister />} />
       <Route path="/generate_form" element={<StoryForm />} />
       <Route path="/generate_story" element={<StoryGenerator />} />

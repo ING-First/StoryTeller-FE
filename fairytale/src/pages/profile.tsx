@@ -1,39 +1,70 @@
 import type {FC} from 'react'
+import React, {useState, useEffect} from 'react'
 import Header from '../components/Header'
 import Button from '../components/Button'
 import FairyTaleList from '../components/FairyTaleList'
 
-type HomeProps = {
+// Mock user data for demonstration
+const mockUser = {
+  name: 'KKURI',
+  isLoggedIn: true
+}
+
+type ProfilePageProps = {
   title?: string
 }
 
-const Profile: FC<HomeProps> = ({title}) => {
+const ProfilePage: FC<ProfilePageProps> = ({title}) => {
+  const [user, setUser] = useState<{name: string; isLoggedIn: boolean} | null>(null)
+
+  useEffect(() => {
+    // Simulate fetching user data from an API after login
+    // In a real application, you would fetch data from your backend
+    const fetchUserData = () => {
+      // Simulate API call delay
+      setTimeout(() => {
+        setUser(mockUser)
+      }, 500)
+    }
+
+    fetchUserData()
+  }, [])
+
+  if (!user || !user.isLoggedIn) {
+    // Show a loading state or redirect if not logged in
+    return <div>Loading...</div>
+  }
+
   return (
     <div className="min-h-screen bg-pink-50">
       <Header />
-      <div className="container p-4 mx-auto">
-        <div className="flex flex-col items-center py-20 text-center">
-          <div className="w-3/4 max-w-4xl mx-auto">
-            <p className="text-4xl font-extrabold leading-tight text-left text-gray-800 font-pinkfong">
-              내 아이만을 위한 동화책,
-            </p>
-            {/* 두 번째 줄: 왼쪽 마진을 최대로 주고 오른쪽 마진으로 여백 조절 */}
-            <p className="mt-2 ml-auto mr-10 text-4xl font-extrabold leading-tight text-gray-800 font-pinkfong">
-              엄마, 아빠의 목소리로 읽어주세요!
+
+      {/* User Profile Section */}
+      <section className="flex flex-col items-center justify-center w-full max-w-2xl p-6 mx-auto mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
+        <div className="flex items-center justify-between w-full">
+          {/* User Name and Profile Edit Link */}
+          <div className="flex-1 text-left">
+            <h1 className="text-4xl font-bold text-gray-800">{user.name}</h1>
+            <p className="mt-2 font-semibold text-pink-500 cursor-pointer">
+              &gt; 회원 정보 수정하기
             </p>
           </div>
+          {/* Profile Image Placeholder */}
+          <div className="flex-shrink-0 w-24 h-24 ml-auto bg-gray-200 border-2 border-pink-300 rounded-full"></div>
         </div>
+      </section>
 
-        {/* 버튼 */}
-        <div className="flex justify-center mt-5 space-x-20 font-pinkfong">
-          <Button to="/voice_register">목소리 등록하러 가기 &gt;&gt;</Button>
-          <Button to="/generate_form">동화 생성하러 가기 &gt;&gt;</Button>
-        </div>
-        <br />
-        <FairyTaleList />
+      {/* Buttons Section */}
+      <div className="flex justify-center mt-5 space-x-20 font-pinkfong">
+        <Button to="/voice_register">목소리 등록하러 가기 &gt;&gt;</Button>
+        <Button to="/generate_form">동화 생성하러 가기 &gt;&gt;</Button>
       </div>
+
+      {/* Fairy Tale List */}
+      <br />
+      <FairyTaleList />
     </div>
   )
 }
 
-export default Profile
+export default ProfilePage

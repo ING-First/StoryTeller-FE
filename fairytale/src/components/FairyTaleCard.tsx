@@ -1,8 +1,8 @@
-// src/components/FairyTaleCard.tsx
-
 import React from 'react'
+import {Link} from 'react-router-dom'
 
 type FairyTaleCardProps = {
+  id?: number // Make the id prop optional
   imageSrc: string
   title: string
   date: string
@@ -10,18 +10,20 @@ type FairyTaleCardProps = {
   className?: string
 }
 
-// 여기에서 React.FC에 props 타입을 제네릭으로 명시해야 합니다.
 const FairyTaleCard: React.FC<FairyTaleCardProps> = ({
+  id,
   imageSrc,
   title,
   date,
   subText,
   className
 }) => {
-  return (
-    <div className="flex flex-col items-center p-4 transition-shadow bg-white rounded-lg shadow-sm cursor-pointer hover:shadow-md">
+  const content = (
+    <div
+      className={`flex flex-col items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow ${
+        id ? 'cursor-pointer' : ''
+      } ${className}`}>
       <img src={imageSrc} alt={title} className="object-cover w-full rounded-md" />
-
       <div className="w-full mt-2 text-center">
         <p className="text-sm font-semibold text-gray-800 truncate">{title}</p>
         <p className="mt-1 text-xs text-gray-500">{date}</p>
@@ -29,6 +31,14 @@ const FairyTaleCard: React.FC<FairyTaleCardProps> = ({
       </div>
     </div>
   )
+
+  // If id exists, render as a clickable Link
+  if (id) {
+    return <Link to={`/story/${id}`}>{content}</Link>
+  }
+
+  // If no id, render as a non-clickable div
+  return content
 }
 
 export default FairyTaleCard
