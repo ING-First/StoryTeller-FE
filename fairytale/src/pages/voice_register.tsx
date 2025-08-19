@@ -21,34 +21,9 @@ const VoiceRegister = () => {
           </div>
         </div>
       </div>
-      {/* 녹음 시작전 */}
-      {!isRecording ? (
-        <section className="mt-10 p-6 bg-white rounded-2xl shadow-xl border border-gray-200">
-          <div className="text-center py-20 flex flex-col items-center">
-            <p className="font-pinkfong text-4xl font-extrabold text-gray-800 leading-tight">
-              하단 버튼을 누르고,
-            </p>
-            <p className="font-pinkfong text-4xl font-extrabold text-gray-800 leading-tight">
-              10초 이상 말씀해주세요.
-            </p>
-            <p className="font-pinkfong text-4xl font-extrabold text-gray-800 leading-tight">
-              ex. "안녕하세요, 저는 OOO입니다."
-            </p>
-            <br />
-            {/* 버튼 */}
-            <div className="font-pinkfong mt-5 flex justify-center space-x-20">
-              <Button onClick={handleStartRecording}>
-                목소리 등록하러 가기 &gt;&gt;
-              </Button>
-            </div>
-          </div>
-        </section>
-      ) : (
-        // 녹음 중일 때
-        <section className="mt-10 p-6 bg-white rounded-2xl shadow-xl border border-gray-200">
+       <section className="mt-10 p-6 bg-white rounded-2xl shadow-xl border border-gray-200">
           <VoiceRecorder />
         </section>
-      )}
     </div>
   )
 }

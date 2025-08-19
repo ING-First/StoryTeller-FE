@@ -1,10 +1,13 @@
 // src/components/VoiceRecorder.tsx
-import React, {useState, useEffect} from 'react'
+import React, {useState, useEffect, useRef} from 'react'
 import Button from './Button' // 버튼 컴포넌트 재사용
+import { voice_register } from "../api/voice_register";
 
 const VoiceRecorder = () => {
   const [isRecording, setIsRecording] = useState(false)
   const [timer, setTimer] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
 
   // 타이머 로직
   useEffect(() => {
@@ -25,15 +28,50 @@ const VoiceRecorder = () => {
     }
   }, [isRecording, timer])
 
-  const handleToggleRecording = () => {
-    setIsRecording(prev => !prev)
+  const handleToggleRecording = async () => {
     if (!isRecording) {
-      setTimer(0)
-      // TODO: 여기서 실제 녹음 시작 API 호출
+      setTimer(0);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          const file = new File([audioBlob], "recording.webm", { type: "audio/webm" });
+
+          try {
+            const res = await voice_register({
+              uid: 1,
+              audio: file,
+            });
+            console.log(res);
+            alert(res.message)
+            window.location.href = "/"
+          } catch (err) {
+            console.error(err);
+            alert("목소리 등록을 실패했습니다.")
+            window.location.reload()
+          }
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error("마이크 접근 실패:", err);
+      }
     } else {
-      // TODO: 여기서 녹음 중지 및 데이터 처리
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
     }
-  }
+  };
 
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60)
