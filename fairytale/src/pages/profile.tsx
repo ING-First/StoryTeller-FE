@@ -1,70 +1,119 @@
-import type {FC} from 'react'
-import React, {useState, useEffect} from 'react'
+import React, {useState} from 'react'
 import Header from '../components/Header'
-import Button from '../components/Button'
-import FairyTaleList from '../components/FairyTaleList'
+import {useNavigate} from 'react-router-dom'
 
-// Mock user data for demonstration
-const mockUser = {
-  name: 'KKURI',
-  isLoggedIn: true
-}
+const ProfileEditPage = () => {
+  // 실제로는 로그인한 사용자의 정보를 상태로 가져옵니다.
+  const [userName, setUserName] = useState('KKURI')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
 
-type ProfilePageProps = {
-  title?: string
-}
+  const navigate = useNavigate()
 
-const ProfilePage: FC<ProfilePageProps> = ({title}) => {
-  const [user, setUser] = useState<{name: string; isLoggedIn: boolean} | null>(null)
+  const handleUpdateProfile = (e: React.FormEvent) => {
+    e.preventDefault()
+    // TODO: 실제 API 호출 로직을 구현합니다.
+    // 예: axios.put('/api/users/profile', { name: userName, password: newPassword });
 
-  useEffect(() => {
-    // Simulate fetching user data from an API after login
-    // In a real application, you would fetch data from your backend
-    const fetchUserData = () => {
-      // Simulate API call delay
-      setTimeout(() => {
-        setUser(mockUser)
-      }, 500)
+    alert('프로필 정보가 성공적으로 업데이트되었습니다.')
+    navigate('/mypage') // 마이페이지로 이동
+  }
+
+  const handleWithdrawal = () => {
+    // 경고창을 띄워 사용자에게 재확인 받습니다.
+    if (window.confirm('정말 회원 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      // TODO: 실제 API 호출 로직을 구현합니다.
+      // 예: axios.delete('/api/users/me');
+
+      alert('회원 탈퇴가 완료되었습니다.')
+      navigate('/') // 메인 페이지로 이동
     }
-
-    fetchUserData()
-  }, [])
-
-  if (!user || !user.isLoggedIn) {
-    // Show a loading state or redirect if not logged in
-    return <div>Loading...</div>
   }
 
   return (
     <div className="min-h-screen bg-pink-50">
       <Header />
+      <div className="container max-w-2xl p-4 mx-auto">
+        <h1 className="mt-10 text-2xl font-bold text-center text-gray-800">
+          회원 정보 수정
+        </h1>
+        <p className="mt-2 text-center text-gray-600">
+          안전한 정보 보호를 위해 정기적으로 비밀번호를 변경해주세요.
+        </p>
 
-      {/* User Profile Section */}
-      <section className="flex flex-col items-center justify-center w-full max-w-2xl p-6 mx-auto mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
-        <div className="flex items-center justify-between w-full">
-          {/* User Name and Profile Edit Link */}
-          <div className="flex-1 text-left">
-            <h1 className="text-4xl font-bold text-gray-800">{user.name}</h1>
-            <p className="mt-2 font-semibold text-pink-500 cursor-pointer">
-              &gt; 회원 정보 수정하기
-            </p>
+        <form
+          onSubmit={handleUpdateProfile}
+          className="p-6 mt-8 bg-white shadow-xl rounded-2xl">
+          {/* 사용자 이름 수정 */}
+          <div className="mb-6">
+            <label className="block mb-2 font-semibold text-gray-700">닉네임</label>
+            <input
+              type="text"
+              value={userName}
+              onChange={e => setUserName(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-300"
+            />
           </div>
-          {/* Profile Image Placeholder */}
-          <div className="flex-shrink-0 w-24 h-24 ml-auto bg-gray-200 border-2 border-pink-300 rounded-full"></div>
+
+          {/* 비밀번호 변경 섹션 */}
+          <h2 className="mt-8 mb-4 text-xl font-bold text-gray-800">비밀번호 변경</h2>
+          <div className="mb-4">
+            <label className="block mb-2 font-semibold text-gray-700">
+              현재 비밀번호
+            </label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              placeholder="현재 비밀번호를 입력하세요"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-300"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block mb-2 font-semibold text-gray-700">새 비밀번호</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              placeholder="새 비밀번호를 입력하세요"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-300"
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block mb-2 font-semibold text-gray-700">
+              새 비밀번호 확인
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              placeholder="새 비밀번호를 다시 입력하세요"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-300"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3 mt-4 font-bold text-white transition-colors bg-pink-400 rounded-lg hover:bg-pink-500">
+            정보 수정
+          </button>
+        </form>
+
+        <div className="p-6 mt-8 bg-white shadow-xl rounded-2xl">
+          <h2 className="mb-4 text-xl font-bold text-red-500">회원 탈퇴</h2>
+          <p className="mb-4 text-gray-600">
+            회원 탈퇴를 진행하시면 모든 정보가 삭제되며 되돌릴 수 없습니다.
+          </p>
+          <button
+            onClick={handleWithdrawal}
+            className="w-full py-3 font-bold text-white transition-colors bg-red-400 rounded-lg hover:bg-red-500">
+            회원 탈퇴하기
+          </button>
         </div>
-      </section>
-
-      {/* Buttons Section */}
-      <div className="flex justify-center mt-5 space-x-20 font-pinkfong">
-        <Button to="/voice_register">목소리 등록하러 가기 &gt;&gt;</Button>
-        <Button to="/generate_form">동화 생성하러 가기 &gt;&gt;</Button>
       </div>
-
-      {/* Fairy Tale List */}
-      <br />
-      <FairyTaleList />
     </div>
   )
 }
 
-export default ProfilePage
+export default ProfileEditPage
