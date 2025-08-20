@@ -1,6 +1,9 @@
 import React, {useState} from 'react'
 import Header from '../components/Header'
 import {useNavigate} from 'react-router-dom'
+import {delete_user} from '../api/delete'
+import {update_user} from '../api/user_update'
+import {user_update_search} from '../api/update_info'
 
 const ProfileEditPage = () => {
   // 실제로는 로그인한 사용자의 정보를 상태로 가져옵니다.
@@ -11,23 +14,52 @@ const ProfileEditPage = () => {
 
   const navigate = useNavigate()
 
-  const handleUpdateProfile = (e: React.FormEvent) => {
-    e.preventDefault()
-    // TODO: 실제 API 호출 로직을 구현합니다.
-    // 예: axios.put('/api/users/profile', { name: userName, password: newPassword });
-
-    alert('프로필 정보가 성공적으로 업데이트되었습니다.')
-    navigate('/mypage') // 마이페이지로 이동
+  const userInfo = async () => {
+    try {
+      const data = await user_update_search(localStorage.uid)
+      setUserName(data.name)
+    } catch (err) {
+      alert('유저 정보를 불러오는데 실패했습니다.')
+      console.error(err)
+    }
   }
 
-  const handleWithdrawal = () => {
+  userInfo()
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const res = await update_user({
+        uid: localStorage.uid,
+        name: userName,
+        currentPasswd: currentPassword,
+        passwd: newPassword,
+        repasswd: confirmPassword,
+
+      });
+      console.log(res);
+      alert('프로필 정보가 성공적으로 업데이트되었습니다.')
+      navigate('/mypage') // 마이페이지로 이동
+    } catch (err: any) {
+      console.error(err);
+      alert("프로필 정보 업데이트를 실패했습니다.");
+    }
+  }
+
+  const handleWithdrawal = async() => {
     // 경고창을 띄워 사용자에게 재확인 받습니다.
     if (window.confirm('정말 회원 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-      // TODO: 실제 API 호출 로직을 구현합니다.
-      // 예: axios.delete('/api/users/me');
-
-      alert('회원 탈퇴가 완료되었습니다.')
-      navigate('/') // 메인 페이지로 이동
+     try {
+        const res = await delete_user({
+          uid: localStorage.uid
+        });
+        console.log(res);
+        alert('회원 탈퇴가 완료되었습니다.')
+        navigate('/') // 메인 페이지로 이동
+      } catch (err: any) {
+        console.error(err);
+        alert("회원 탈퇴를 실패했습니다.");
+      }
     }
   }
 

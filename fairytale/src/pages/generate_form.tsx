@@ -52,7 +52,7 @@ const StoryForm = () => {
       });
       console.log(res);
       alert(res.message);
-      window.location.href = "/generate_story";
+      window.location.href = `/generate_story?fid=${res.fid}`;
     } catch (err: any) {
       console.error(err);
       alert("동화생성을 샐패했습니다.");

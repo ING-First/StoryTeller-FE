@@ -1,8 +1,8 @@
-import axios from 'axios'
+import api from "./index";
 
-const API_BASE = process.env.REACT_APP_API_BASE
-
-export async function delete_user(uid: number, passwd: string) {
-  const res = await axios.post(`${API_BASE}/delete_user`, {uid, passwd})
-  return res.data
+export async function delete_user(user: {
+  uid: number;
+}) {
+  const res = await api.post("/delete_user", user);
+  return res.data;
 }

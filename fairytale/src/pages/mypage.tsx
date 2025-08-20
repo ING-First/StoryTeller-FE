@@ -9,7 +9,7 @@ import {Link} from 'react-router-dom' // Import Link
 
 // Mock user data for demonstration
 const mockUser = {
-  name: 'KKURI',
+  name: localStorage.name,
   isLoggedIn: true
 }
 
@@ -69,14 +69,6 @@ const Mypage: FC<MypageProps> = ({title}) => {
           <div className="flex-shrink-0 w-24 h-24 ml-auto bg-gray-200 border-2 border-pink-300 rounded-full"></div>
         </div>
       </section>
-
-      {/* Buttons Section */}
-      <div className="flex justify-center mt-5 space-x-20 font-pinkfong">
-        <Button to="/voice_register">목소리 등록하러 가기 &gt;&gt;</Button>
-        <Button to="/generate_form">동화 생성하러 가기 &gt;&gt;</Button>
-      </div>
-
-      {/* Fairy Tale List */}
       <br />
       <FairyTaleList />
     </div>
