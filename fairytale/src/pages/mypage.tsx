@@ -1,6 +1,7 @@
 // src/pages/Mypage.tsx
 import type {FC} from 'react'
-import React, {useState, useEffect} from 'react'
+import React, {useState, useEffect, useRef} from 'react'
+import { useNavigate } from 'react-router-dom'
 import Header from '../components/Header'
 import Button from '../components/Button'
 import FairyTaleList from '../components/FairyTaleList'
@@ -18,10 +19,21 @@ type MypageProps = {
 
 const Mypage: FC<MypageProps> = ({title}) => {
   const [user, setUser] = useState<{name: string; isLoggedIn: boolean} | null>(null)
+  const navigate = useNavigate()
+  const hasCheckedLogin = useRef(false)
 
   useEffect(() => {
     // Simulate fetching user data from an API after login
     // In a real application, you would fetch data from your backend
+    if (hasCheckedLogin.current) return
+    hasCheckedLogin.current = true
+
+    const uid = localStorage.getItem('uid')
+    if (!uid) {
+      alert("로그인이 필요합니다.")
+      navigate('/')
+    }
+
     const fetchUserData = () => {
       // Simulate API call delay
       setTimeout(() => {

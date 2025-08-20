@@ -1,4 +1,5 @@
-import React, {useState} from 'react'
+import React, {useState, useEffect, useRef} from 'react'
+import { useNavigate } from 'react-router-dom'
 import Header from '../components/Header'
 import { generate } from '../api/story_generate'
 
@@ -7,6 +8,20 @@ const StoryForm = () => {
   const [age, setAge] = useState('')
   const [genre, setGenre] = useState('')
   const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
+  const hasCheckedLogin = useRef(false)
+
+  useEffect(() => {
+    if (hasCheckedLogin.current) return
+    hasCheckedLogin.current = true
+
+    const uid = localStorage.getItem('uid')
+    if (!uid) {
+      alert("로그인이 필요합니다.")
+      navigate('/')
+    }
+  }, [navigate])
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     console.log('폼 제출:', {characterName, age, genre})
@@ -32,7 +47,7 @@ const StoryForm = () => {
         name: characterName,
         age: Number(age),
         genre: genre,
-        uid: 1,
+        uid: localStorage.uid,
         type: 2
       });
       console.log(res);

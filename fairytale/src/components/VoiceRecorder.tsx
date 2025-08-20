@@ -8,6 +8,7 @@ const VoiceRecorder = () => {
   const [timer, setTimer] = useState(0)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
+  const [loading, setLoading] = useState(false)
 
   // 타이머 로직
   useEffect(() => {
@@ -48,8 +49,9 @@ const VoiceRecorder = () => {
           const file = new File([audioBlob], "recording.webm", { type: "audio/webm" });
 
           try {
+            setLoading(true)
             const res = await voice_register({
-              uid: 1,
+              uid: localStorage.uid,
               audio: file,
             });
             console.log(res);
@@ -59,13 +61,15 @@ const VoiceRecorder = () => {
             console.error(err);
             alert("목소리 등록을 실패했습니다.")
             window.location.reload()
+          } finally {
+            setLoading(false)
           }
         };
 
         mediaRecorder.start();
         setIsRecording(true);
       } catch (err) {
-        console.error("마이크 접근 실패:", err);
+        console.error("마이크 접근 실패");
       }
     } else {
       mediaRecorderRef.current?.stop();
@@ -109,10 +113,17 @@ const VoiceRecorder = () => {
         {/* 녹음 시작/종료 버튼 */}
         <div className="font-pinkfong mt-10 flex justify-center space-x-20">
           <Button onClick={handleToggleRecording}>
-            {isRecording ? '녹음 중지' : '녹음 시작'}
+            {isRecording ? '녹음 완료' : '녹음 시작'}
           </Button>
         </div>
       </div>
+      {/* 로딩 오버레이 */}
+      {loading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center z-50">
+          <div className="w-16 h-16 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin"></div>
+          <p className="mt-6 text-white text-xl font-bold">목소리 등록중이에요...</p>
+        </div>
+      )}
     </section>
   )
 }

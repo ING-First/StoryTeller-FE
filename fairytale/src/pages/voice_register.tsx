@@ -1,10 +1,24 @@
-import React, {useState} from 'react'
+import React, {useState, useEffect, useRef} from 'react'
+import { useNavigate } from 'react-router-dom'
 import Header from '../components/Header'
 import Button from '../components/Button'
 import VoiceRecorder from '../components/VoiceRecorder'
 
 const VoiceRegister = () => {
   const [isRecording, setIsRecording] = useState(false)
+  const navigate = useNavigate()
+  const hasCheckedLogin = useRef(false)
+
+  useEffect(() => {
+      if (hasCheckedLogin.current) return
+      hasCheckedLogin.current = true
+  
+      const uid = localStorage.getItem('uid')
+      if (!uid) {
+        alert("로그인이 필요합니다.")
+        navigate('/')
+      }
+    }, [navigate])
   const handleStartRecording = () => {
     setIsRecording(true) // 버튼 클릭 시 상태를 true로 변경
   }

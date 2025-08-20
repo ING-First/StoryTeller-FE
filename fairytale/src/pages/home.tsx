@@ -1,10 +1,21 @@
 import type {FC} from 'react'
+import { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import Button from '../components/Button'
 import FairyTaleList from '../components/FairyTaleList'
 import FairyTaleCarousel from '../components/FairyTaleCarousel'
 
 const Home: FC = () => {
+  const location = useLocation()
+  
+  useEffect(() => {
+    if (location.state?.alert) {
+      alert(location.state.alert)
+      window.history.replaceState({}, document.title) // state 초기화
+    }
+  }, [location])
+
   return (
     <div className="min-h-screen bg-pink-50">
       <Header />
