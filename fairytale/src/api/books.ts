@@ -8,7 +8,7 @@ export type FairyTale = {
   summary: string
   contents?: string // contents는 상세 페이지에서만 필요할 수 있으므로 optional로 설정
   createDate: string
-  image_path: string
+  image: string
 }
 
 export type FairyTaleResponse = {

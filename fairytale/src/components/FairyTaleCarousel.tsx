@@ -74,7 +74,7 @@ const FairyTaleCarousel = () => {
             <Link to={`/story/${tale.fid}`}>
               <FairyTaleCard
                 id={tale.fid}
-                imageSrc={tale.image_path}
+                imageSrc={tale.image}
                 title={tale.title}
                 date={tale.createDate}
                 subText={tale.summary}
