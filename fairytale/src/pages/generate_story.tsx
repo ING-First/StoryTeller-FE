@@ -9,10 +9,35 @@ import PageFlip from '../components/PageFlip'
 const PAGE_W = 530 // 각 페이지 너비
 const PAGE_H = 680 // 각 페이지 높이
 
+// --- JWT(JWS) payload 파서 (base64url -> JSON) ---
+interface JWTPayload {
+  sub?: string | number
+  uid?: string | number
+  exp?: number // seconds since epoch
+}
+function parseJwt(token: string): JWTPayload | null {
+  try {
+    const base64Url = token.split('.')[1]
+    if (!base64Url) return null
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    return JSON.parse(jsonPayload)
+  } catch {
+    return null
+  }
+}
+
 const GenerateStory = () => {
-  const params = useParams()
-  const uid = params.uid
-  const fid = params.fid
+  // URL에서는 fid만 받음
+  const {fid} = useParams<{fid: string}>()
+
+  // uid는 JWT에서 복원
+  const [uid, setUid] = useState<number | null>(null)
 
   const [fairyTale, setFairyTale] = useState<FairyTaleItem | null>(null)
   const [loading, setLoading] = useState(true)
@@ -32,26 +57,58 @@ const GenerateStory = () => {
   // PageFlip ref 추가
   const pageFlipRef = useRef<any>(null)
 
+  // 1) localStorage에서 uid 복원
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    const uidStr = localStorage.getItem('uid')
+
+    if (!token || !uidStr) {
+      setError('로그인이 필요합니다.')
+      setLoading(false)
+      return
+    }
+
+    const uidNum = parseInt(uidStr, 10)
+    if (isNaN(uidNum)) {
+      setError('유효하지 않은 사용자 정보입니다.')
+      setLoading(false)
+      return
+    }
+
+    // JWT 만료 시간 체크 (옵션)
+    const payload = parseJwt(token)
+    if (payload?.exp && payload.exp * 1000 < Date.now()) {
+      setError('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+      setLoading(false)
+      return
+    }
+
+    setUid(uidNum)
+  }, [])
+
   // 이미지 로드 실패
   const handleImageError = (pageIndex: number) => {
     setImageLoadStates(prev => ({...prev, [pageIndex]: false}))
   }
 
-  // 동화 & 이어읽기
+  // 2) 동화 & 이어읽기 (uid 복원되고 fid 있을 때 실행)
   useEffect(() => {
     const loadFairyTale = async () => {
-      if (!uid || !fid) {
-        setError('잘못된 URL 파라미터입니다.')
+      const fidNum = fid ? parseInt(fid, 10) : NaN
+
+      if (!uid || !fid || Number.isNaN(fidNum)) {
+        setError('잘못된 인증 정보 또는 URL 파라미터입니다.')
         setLoading(false)
         return
       }
+
       try {
         setLoading(true)
-        const data = await getFairyTaleById(parseInt(uid), parseInt(fid))
+        const data = await getFairyTaleById(uid, fidNum)
         setFairyTale(data)
 
         try {
-          const resumeData = await resumeReading(parseInt(uid), parseInt(fid))
+          const resumeData = await resumeReading(uid, fidNum)
           const startIdx = Math.max((resumeData?.next_page ?? 1) - 1, 0)
           setCurrentPage(startIdx)
 
@@ -70,7 +127,8 @@ const GenerateStory = () => {
         setLoading(false)
       }
     }
-    loadFairyTale()
+    // uid가 복원되고 fid가 유효할 때만 호출
+    if (uid) loadFairyTale()
   }, [uid, fid])
 
   // 오디오 재생(왼쪽 페이지 기준)
@@ -86,8 +144,8 @@ const GenerateStory = () => {
       }
 
       const response = await readFairyTalePage(
-        parseInt(uid),
-        parseInt(fid),
+        uid,
+        parseInt(fid, 10),
         pageIndex + 1,
         '' // 1-based
       )
@@ -166,7 +224,6 @@ const GenerateStory = () => {
     setCurrentPage(newPage)
     stopAudio()
 
-    // PageFlip 컴포넌트의 이전 페이지로 이동
     try {
       if (pageFlipRef.current.pageFlip) {
         pageFlipRef.current.pageFlip().flipPrev()
@@ -175,7 +232,6 @@ const GenerateStory = () => {
       } else if (pageFlipRef.current.turnToPrevPage) {
         pageFlipRef.current.turnToPrevPage()
       } else {
-        // 메소드를 찾을 수 없는 경우 로그 출력
         console.log('Available methods:', Object.getOwnPropertyNames(pageFlipRef.current))
       }
     } catch (error) {
@@ -190,7 +246,6 @@ const GenerateStory = () => {
     setCurrentPage(newPage)
     stopAudio()
 
-    // PageFlip 컴포넌트의 다음 페이지로 이동
     try {
       if (pageFlipRef.current.pageFlip) {
         pageFlipRef.current.pageFlip().flipNext()
@@ -199,7 +254,6 @@ const GenerateStory = () => {
       } else if (pageFlipRef.current.turnToNextPage) {
         pageFlipRef.current.turnToNextPage()
       } else {
-        // 메소드를 찾을 수 없는 경우 로그 출력
         console.log('Available methods:', Object.getOwnPropertyNames(pageFlipRef.current))
       }
     } catch (error) {
@@ -297,23 +351,18 @@ const GenerateStory = () => {
                         {idx + 1}
                       </div>
 
-                      {/* 이미지 영역 - 더 우아한 프레임 */}
+                      {/* 이미지 영역 */}
                       <div className="flex-shrink-0 mb-6 h-[480px] w-full flex justify-center">
                         <div className="relative w-[320px] h-[480px]">
                           {showImage ? (
                             <div className="relative w-full h-full group">
-                              {/* 이미지 그림자 효과 */}
                               <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 to-orange-400/20 rounded-xl transform rotate-1 group-hover:rotate-2 transition-transform duration-300"></div>
-
-                              {/* 실제 이미지 */}
                               <img
                                 src={p.image!}
                                 alt={`페이지 ${idx + 1}`}
                                 className="relative w-full h-full object-cover rounded-xl border-3 border-white shadow-xl transform group-hover:scale-105 transition-all duration-300"
                                 onError={() => handleImageError(idx)}
                               />
-
-                              {/* 이미지 위 미묘한 오버레이 */}
                               <div className="absolute inset-0 bg-gradient-to-t from-black/5 via-transparent to-white/10 rounded-xl pointer-events-none"></div>
                             </div>
                           ) : (
@@ -332,19 +381,14 @@ const GenerateStory = () => {
                         </div>
                       </div>
 
-                      {/* 텍스트 영역 - 더 세련된 타이포그래피 */}
+                      {/* 텍스트 영역 */}
                       <div className="flex-1 flex items-start justify-center px-4">
                         {p.text ? (
                           <div className="relative max-w-[400px]">
-                            {/* 텍스트 배경 장식 */}
                             <div className="absolute -inset-4 bg-gradient-to-r from-amber-50/50 via-white/30 to-orange-50/50 rounded-2xl"></div>
-
-                            {/* 실제 텍스트 */}
                             <p className="relative text-base leading-7 text-gray-800 text-center font-pinkfong tracking-wide">
                               {p.text}
                             </p>
-
-                            {/* 텍스트 하단 장식 라인 */}
                             <div className="mt-4 flex justify-center">
                               <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent"></div>
                             </div>
