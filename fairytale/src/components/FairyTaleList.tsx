@@ -14,7 +14,7 @@ const FairyTaleList: React.FC = () => {
       try {
         setIsLoading(true)
         const data = await check_records(localStorage.uid)
-        setFairyTales(data)
+        setFairyTales(data.records)
       } catch (err) {
         setError("읽은 기록이 없습니다.")
         console.error(err)
@@ -53,12 +53,12 @@ const FairyTaleList: React.FC = () => {
       <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 리스트</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           {fairyTales.map(tale => (
-            <Link key={tale.id} to={`/story/${tale.id}`} className="cursor-pointer">
+            <Link key={tale.fid} to={`/story/${tale.fid}`} className="cursor-pointer">
               <FairyTaleCard
                 imageSrc={tale.imageSrc}
                 title={tale.title}
-                date={tale.date}
-                subText={tale.subText}
+                date={tale.create_date}
+                subText={tale.summary}
               />
             </Link>
           ))}
