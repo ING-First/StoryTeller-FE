@@ -20,7 +20,7 @@ export default function RoutesSetup() {
       <Route path="/mypage" element={<Mypage />} />
       <Route path="/voice_register" element={<VoiceRegister />} />
       <Route path="/generate_form" element={<StoryForm />} />
-      <Route path="/generate_story/:uid/:fid" element={<StoryGenerator />} />
+      <Route path="/generate_story/:fid" element={<StoryGenerator />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/profile" element={<ProfileEditPage />} />
