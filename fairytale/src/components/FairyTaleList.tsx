@@ -1,8 +1,8 @@
 // src/components/FairyTaleList.tsx
-import React, { useState, useEffect } from 'react'
+import React, {useState, useEffect} from 'react'
 import FairyTaleCard from './FairyTaleCard'
-import { Link } from 'react-router-dom'
-import { check_records, FairyTale } from '../api/records'
+import {Link} from 'react-router-dom'
+import {check_records, FairyTale} from '../api/records'
 
 const FairyTaleList: React.FC = () => {
   const [fairyTales, setFairyTales] = useState<FairyTale[]>([])
@@ -30,7 +30,7 @@ const FairyTaleList: React.FC = () => {
     return (
       <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
         <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 리스트</h3>
-        <div className="flex justify-center items-center h-32">
+        <div className="flex items-center justify-center h-32">
           <div className="text-gray-500">로딩 중...</div>
         </div>
       </section>

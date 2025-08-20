@@ -1,88 +1,49 @@
-// src/components/FairyTaleCarousel.tsx
 import React, {useState, useEffect} from 'react'
 import FairyTaleCard from './FairyTaleCard'
-import {Link} from 'react-router-dom' // Link 컴포넌트 추가
-
-const initialFairyTales = [
-  // id 속성을 추가합니다.
-  {
-    id: 1,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '나는야 골목대장 윤지원',
-    date: '2025/06/10',
-    subText: '골목대장 웅지현의 일생'
-  },
-  {
-    id: 2,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '밤하늘을 여행하는 아이',
-    date: '2025/06/10',
-    subText: '난이도 조절을 위해 필요해요'
-  },
-  {
-    id: 3,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '숲 속의 작은 집',
-    date: '2025/06/10',
-    subText: '깊은 숲 속 마법을 부리는 소녀'
-  },
-  {
-    id: 4,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '별과 함께 잠든 아이',
-    date: '2025/06/10',
-    subText: '밤이 되니 별과 함께 잠든 아이'
-  },
-  {
-    id: 5,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '새로운 모험의 시작',
-    date: '2025/06/10',
-    subText: '새로운 모험을 떠나는 소년'
-  },
-  {
-    id: 6,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '바다 속 신비한 친구들',
-    date: '2025/06/10',
-    subText: '바다 속 친구들을 만나는 이야기'
-  },
-  {
-    id: 7,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '무지개를 찾아서',
-    date: '2025/06/10',
-    subText: '무지개 끝에 숨겨진 보물을 찾아서'
-  },
-  {
-    id: 8,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '신기한 마법의 성',
-    date: '2025/06/10',
-    subText: '마법의 성에서 일어나는 신기한 일'
-  }
-]
+import {Link} from 'react-router-dom'
+import {fetchDefaultFairyTales, FairyTale} from '../api/books'
 
 const FairyTaleCarousel = () => {
-  const [items, setItems] = useState(() => {
-    const clonedBefore = initialFairyTales.slice(-4)
-    const clonedAfter = initialFairyTales.slice(0, 4)
-    return [...clonedBefore, ...initialFairyTales, ...clonedAfter]
-  })
-
+  const [initialFairyTales, setInitialFairyTales] = useState<FairyTale[]>([])
+  const [items, setItems] = useState<FairyTale[]>([])
   const [offset, setOffset] = useState(4)
   const [isTransitioning, setIsTransitioning] = useState(true)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setOffset(prevOffset => prevOffset + 1)
-    }, 1500)
-
-    return () => clearInterval(interval)
+    const getFairyTales = async () => {
+      try {
+        const dbTales = await fetchDefaultFairyTales()
+        setInitialFairyTales(dbTales)
+      } catch (error) {
+        console.error('Failed to load fairy tales from API', error)
+        setInitialFairyTales([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    getFairyTales()
   }, [])
 
   useEffect(() => {
-    if (offset >= items.length - 4) {
+    if (initialFairyTales.length > 0) {
+      const clonedBefore = initialFairyTales.slice(-4)
+      const clonedAfter = initialFairyTales.slice(0, 4)
+      setItems([...clonedBefore, ...initialFairyTales, ...clonedAfter])
+    }
+  }, [initialFairyTales])
+
+  useEffect(() => {
+    if (items.length > 0) {
+      const interval = setInterval(() => {
+        setOffset(prevOffset => prevOffset + 1)
+      }, 1500)
+      return () => clearInterval(interval)
+    }
+  }, [items])
+
+  useEffect(() => {
+    if (items.length > 0 && offset >= items.length - 4) {
       setIsTransitioning(false)
       setTimeout(() => {
         setOffset(4)
@@ -91,6 +52,14 @@ const FairyTaleCarousel = () => {
       setIsTransitioning(true)
     }
   }, [offset, items.length])
+
+  if (loading) {
+    return <div>로딩 중...</div>
+  }
+
+  if (initialFairyTales.length === 0) {
+    return null // 데이터가 없으면 캐러셀을 렌더링하지 않음
+  }
 
   return (
     <section className="p-6 mt-10 overflow-hidden bg-white border border-gray-200 shadow-xl rounded-2xl">
@@ -102,12 +71,13 @@ const FairyTaleCarousel = () => {
         style={{transform: `translateX(-${offset * 25}%)`}}>
         {items.map((tale, index) => (
           <div key={index} className="flex-shrink-0 w-1/4 px-2">
-            <Link to={`/story/${tale.id}`}>
+            <Link to={`/story/${tale.fid}`}>
               <FairyTaleCard
-                imageSrc={tale.imageSrc}
+                id={tale.fid}
+                imageSrc={tale.image_path}
                 title={tale.title}
-                date={tale.date}
-                subText={tale.subText}
+                date={tale.createDate}
+                subText={tale.summary}
               />
             </Link>
           </div>
