@@ -2,7 +2,7 @@ import api from "./index";
 
 export interface FairyTale {
   fid: number
-  imageSrc: string
+  image_url: string
   title: string
   create_date: string
   summary: string
