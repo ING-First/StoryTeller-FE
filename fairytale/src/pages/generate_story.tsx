@@ -2,7 +2,8 @@
 import React, {useState, useEffect, useRef} from 'react'
 import {useParams} from 'react-router-dom'
 import Header from '../components/Header'
-import {getFairyTaleById, FairyTaleItem, readFairyTalePage} from '../api/search'
+import {getFairyTaleById, FairyTaleItem} from '../api/search'
+import {readFairyTalePage} from '../api/read'
 import {resumeReading} from '../api/read_resume'
 import {getAllImages} from '../api/image' // 다시 getAllImages 사용
 import PageFlip from '../components/PageFlip'
@@ -170,7 +171,7 @@ const GenerateStory = () => {
         uid,
         parseInt(fid, 10),
         pageIndex + 1,
-        '' // 1-based
+        'eleven_labs_default' // ElevenLabs 기본 voice_id 사용
       )
 
       if (!(response instanceof Blob)) {
@@ -448,13 +449,13 @@ const GenerateStory = () => {
                 {/* 재생/토글: 왼쪽 페이지 기준 */}
                 <button
                   onClick={() => {
-                    if (isPlaying && playingPage === leftIndex) stopAudio()
-                    else playPageAudio(leftIndex)
+                    if (isPlaying && playingPage === currentPage) stopAudio()
+                    else playPageAudio(currentPage)
                   }}
-                  disabled={!fairyTale.pages[leftIndex]?.text}
+                  disabled={!fairyTale.pages[currentPage]?.text}
                   aria-label="재생"
                   className="w-12 h-12 rounded-full bg-white border border-gray-300 shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
-                  {isPlaying && playingPage === leftIndex ? (
+                  {isPlaying && playingPage === currentPage ? (
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
                     </svg>
