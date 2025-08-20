@@ -16,7 +16,7 @@ const FairyTaleList: React.FC = () => {
         const data = await check_records(localStorage.uid)
         setFairyTales(data)
       } catch (err) {
-        setError('동화를 불러오는데 실패했습니다.')
+        setError("읽은 기록이 없습니다.")
         console.error(err)
       } finally {
         setIsLoading(false)
@@ -42,7 +42,7 @@ const FairyTaleList: React.FC = () => {
       <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
         <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 리스트</h3>
         <div className="flex justify-center items-center h-32">
-          <div className="text-red-500">{error}</div>
+          <div className="text-gray-500">{error}</div>
         </div>
       </section>
     )
@@ -51,11 +51,6 @@ const FairyTaleList: React.FC = () => {
   return (
     <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
       <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 리스트</h3>
-      {fairyTales.length === 0 ? (
-        <div className="flex justify-center items-center h-32">
-          <div className="text-gray-500">아직 생성된 동화가 없습니다.</div>
-        </div>
-      ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           {fairyTales.map(tale => (
             <Link key={tale.id} to={`/story/${tale.id}`} className="cursor-pointer">
@@ -68,7 +63,6 @@ const FairyTaleList: React.FC = () => {
             </Link>
           ))}
         </div>
-      )}
     </section>
   )
 }
