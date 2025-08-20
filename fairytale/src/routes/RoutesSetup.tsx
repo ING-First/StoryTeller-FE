@@ -9,7 +9,7 @@ import StoryForm from '../pages/generate_form'
 import StoryGenerator from '../pages/generate_story'
 import LoginPage from '../pages/login'
 import ProfileEditPage from '../pages/profile'
-import StoryDetailPage from '../pages/story_detail'
+import StoryDetailPage from '../pages/detail'
 import NoMatch from '../routes/NoMatch'
 
 export default function RoutesSetup() {
@@ -24,7 +24,7 @@ export default function RoutesSetup() {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/profile" element={<ProfileEditPage />} />
-      <Route path="/story/:id" element={<StoryDetailPage />} />
+      <Route path="/detail/:fid" element={<StoryDetailPage />} />
     </Routes>
   )
 }
