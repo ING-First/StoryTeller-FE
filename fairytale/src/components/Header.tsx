@@ -36,7 +36,7 @@ const Header = () => {
       <div className="flex items-center space-x-4">
         {isLoggedIn ? (
           <nav className="flex items-center space-x-4 font-medium text-gray-600">
-            <a href="/profile" className="hover:text-gray-900">
+            <a href="/mypage" className="hover:text-gray-900">
               Mypage
             </a>
             <span className="text-gray-700">{username}</span>

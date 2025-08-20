@@ -1,54 +1,74 @@
-import React, {useState, useEffect} from 'react'
+// src/components/FairyTaleList.tsx
+import React from 'react'
 import FairyTaleCard from './FairyTaleCard'
 import {Link} from 'react-router-dom'
-import {fetchFairyTalesByUser, FairyTale} from '../api/books'
-
-// 임시 유저 ID. 실제로는 로그인 상태에서 가져와야 합니다.
-const MOCK_USER_ID = 1
+import {check_records, FairyTale} from '../api/records'
 
 const FairyTaleList: React.FC = () => {
-  const [myFairyTales, setMyFairyTales] = useState<FairyTale[]>([])
-  const [loading, setLoading] = useState(true)
+  const [fairyTales, setFairyTales] = useState<FairyTale[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const getMyFairyTales = async () => {
+    const fetchFairyTales = async () => {
       try {
-        const userTales = await fetchFairyTalesByUser(MOCK_USER_ID)
-        setMyFairyTales(userTales)
-      } catch (error) {
-        console.error('Failed to load my fairy tales from API', error)
-        setMyFairyTales([])
+        setIsLoading(true)
+        const data = await check_records(localStorage.uid)
+        setFairyTales(data)
+      } catch (err) {
+        setError('동화를 불러오는데 실패했습니다.')
+        console.error(err)
       } finally {
-        setLoading(false)
+        setIsLoading(false)
       }
     }
-    getMyFairyTales()
+
+    fetchFairyTales()
   }, [])
 
-  if (loading) {
-    return <div>나의 동화를 불러오는 중...</div>
+  if (isLoading) {
+    return (
+      <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
+        <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 리스트</h3>
+        <div className="flex justify-center items-center h-32">
+          <div className="text-gray-500">로딩 중...</div>
+        </div>
+      </section>
+    )
   }
 
-  if (myFairyTales.length === 0) {
-    return <div>생성된 동화가 없습니다.</div>
+  if (error) {
+    return (
+      <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
+        <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 리스트</h3>
+        <div className="flex justify-center items-center h-32">
+          <div className="text-red-500">{error}</div>
+        </div>
+      </section>
+    )
   }
 
   return (
     <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
       <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 리스트</h3>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
-        {myFairyTales.map(tale => (
-          <Link key={tale.fid} to={`/story/${tale.fid}`} className="cursor-pointer">
-            <FairyTaleCard
-              id={tale.fid}
-              imageSrc={tale.image_path}
-              title={tale.title}
-              date={tale.createDate}
-              subText={tale.summary}
-            />
-          </Link>
-        ))}
-      </div>
+      {fairyTales.length === 0 ? (
+        <div className="flex justify-center items-center h-32">
+          <div className="text-gray-500">아직 생성된 동화가 없습니다.</div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+          {fairyTales.map(tale => (
+            <Link key={tale.id} to={`/story/${tale.id}`} className="cursor-pointer">
+              <FairyTaleCard
+                imageSrc={tale.imageSrc}
+                title={tale.title}
+                date={tale.date}
+                subText={tale.subText}
+              />
+            </Link>
+          ))}
+        </div>
+      )}
     </section>
   )
 }

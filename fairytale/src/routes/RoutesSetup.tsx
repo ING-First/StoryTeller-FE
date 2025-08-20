@@ -9,7 +9,7 @@ import StoryForm from '../pages/generate_form'
 import StoryGenerator from '../pages/generate_story'
 import LoginPage from '../pages/login'
 import ProfileEditPage from '../pages/profile'
-import StoryDetailPage from '../pages/story_detail'
+import StoryDetailPage from '../pages/detail'
 import NoMatch from '../routes/NoMatch'
 
 export default function RoutesSetup() {
@@ -20,11 +20,11 @@ export default function RoutesSetup() {
       <Route path="/mypage" element={<Mypage />} />
       <Route path="/voice_register" element={<VoiceRegister />} />
       <Route path="/generate_form" element={<StoryForm />} />
-      <Route path="/generate_story/:uid/:fid" element={<StoryGenerator />} />
+      <Route path="/generate_story/:fid" element={<StoryGenerator />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/profile" element={<ProfileEditPage />} />
-      <Route path="/story/:id" element={<StoryDetailPage />} />
+      <Route path="/detail/:fid" element={<StoryDetailPage />} />
     </Routes>
   )
 }
