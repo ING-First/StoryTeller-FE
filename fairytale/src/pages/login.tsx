@@ -10,6 +10,7 @@ const LoginPage: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     try {
       const res = await login({ id, passwd });
       localStorage.setItem("uid", res.uid);
