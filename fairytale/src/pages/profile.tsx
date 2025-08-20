@@ -1,12 +1,13 @@
 import React, {useState} from 'react'
 import Header from '../components/Header'
-import {useNavigate} from 'react-router-dom'
+import {data, useNavigate} from 'react-router-dom'
 import {delete_user} from '../api/delete'
 import {update_user} from '../api/user_update'
 import {user_update_search} from '../api/update_info'
 
 const ProfileEditPage = () => {
   // 실제로는 로그인한 사용자의 정보를 상태로 가져옵니다.
+  const [userId, setUserId] = useState('')
   const [userName, setUserName] = useState('KKURI')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -16,7 +17,8 @@ const ProfileEditPage = () => {
 
   const userInfo = async () => {
     try {
-      const data = await user_update_search(localStorage.uid)
+      const data = await user_update_search({uid: Number(localStorage.getItem("uid"))})
+      setUserId(data.id)
       setUserName(data.name)
     } catch (err) {
       alert('유저 정보를 불러오는데 실패했습니다.')
@@ -30,8 +32,8 @@ const ProfileEditPage = () => {
     e.preventDefault()
     try {
       const res = await update_user({
-        uid: localStorage.uid,
-        name: userName,
+        uid: Number(localStorage.getItem("uid")),
+        id: userId,
         currentPasswd: currentPassword,
         passwd: newPassword,
         repasswd: confirmPassword,
@@ -51,11 +53,17 @@ const ProfileEditPage = () => {
     if (window.confirm('정말 회원 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
      try {
         const res = await delete_user({
-          uid: localStorage.uid
+          uid: Number(localStorage.getItem("uid"))
         });
         console.log(res);
+        localStorage.removeItem("token");
+        localStorage.removeItem("uid");
+        localStorage.removeItem("name");
+
         alert('회원 탈퇴가 완료되었습니다.')
         navigate('/') // 메인 페이지로 이동
+        window.location.reload();
+        
       } catch (err: any) {
         console.error(err);
         alert("회원 탈퇴를 실패했습니다.");
