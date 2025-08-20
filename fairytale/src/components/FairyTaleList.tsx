@@ -1,59 +1,50 @@
-// src/components/FairyTaleList.tsx
-import React from 'react'
+import React, {useState, useEffect} from 'react'
 import FairyTaleCard from './FairyTaleCard'
-import {Link} from 'react-router-dom' // Link 컴포넌트 import
+import {Link} from 'react-router-dom'
+import {fetchFairyTalesByUser, FairyTale} from '../api/books'
 
-type FairyTale = {
-  id: number
-  imageSrc: string
-  title: string
-  date: string
-  subText: string
-}
-
-const myFairyTales: FairyTale[] = [
-  {
-    id: 1,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '나는야 골목대장 윤지원',
-    date: '2025/08/10',
-    subText: '골목대장 웅지현의 일생'
-  },
-  {
-    id: 2,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '밤하늘을 여행하는 아이',
-    date: '2025/08/10',
-    subText: '난이도 조절을 위해 필요해요'
-  },
-  {
-    id: 3,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '숲 속의 작은 집',
-    date: '2025/08/10',
-    subText: '깊은 숲 속 마법을 부리는 소녀'
-  },
-  {
-    id: 4,
-    imageSrc: '/assets/pepe-2.jpg',
-    title: '별과 함께 잠든 아이',
-    date: '2025/08/10',
-    subText: '밤이 되니 별과 함께 잠든 아이'
-  }
-]
+// 임시 유저 ID. 실제로는 로그인 상태에서 가져와야 합니다.
+const MOCK_USER_ID = 1
 
 const FairyTaleList: React.FC = () => {
+  const [myFairyTales, setMyFairyTales] = useState<FairyTale[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const getMyFairyTales = async () => {
+      try {
+        const userTales = await fetchFairyTalesByUser(MOCK_USER_ID)
+        setMyFairyTales(userTales)
+      } catch (error) {
+        console.error('Failed to load my fairy tales from API', error)
+        setMyFairyTales([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    getMyFairyTales()
+  }, [])
+
+  if (loading) {
+    return <div>나의 동화를 불러오는 중...</div>
+  }
+
+  if (myFairyTales.length === 0) {
+    return <div>생성된 동화가 없습니다.</div>
+  }
+
   return (
     <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
       <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 리스트</h3>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
         {myFairyTales.map(tale => (
-          <Link key={tale.id} to={`/story/${tale.id}`} className="cursor-pointer">
+          <Link key={tale.fid} to={`/story/${tale.fid}`} className="cursor-pointer">
             <FairyTaleCard
-              imageSrc={tale.imageSrc}
+              id={tale.fid}
+              imageSrc={tale.image_path}
               title={tale.title}
-              date={tale.date}
-              subText={tale.subText}
+              date={tale.createDate}
+              subText={tale.summary}
             />
           </Link>
         ))}
