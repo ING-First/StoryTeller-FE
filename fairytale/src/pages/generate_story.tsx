@@ -4,6 +4,7 @@ import {useParams} from 'react-router-dom'
 import Header from '../components/Header'
 import {getFairyTaleById, FairyTaleItem, readFairyTalePage} from '../api/search'
 import {resumeReading} from '../api/read_resume'
+import {getAllImages} from '../api/image' // 다시 getAllImages 사용
 import PageFlip from '../components/PageFlip'
 
 const PAGE_W = 530 // 각 페이지 너비
@@ -50,6 +51,7 @@ const GenerateStory = () => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [playingPage, setPlayingPage] = useState<number | null>(null)
   const [imageLoadStates, setImageLoadStates] = useState<{[key: number]: boolean}>({})
+  const [pageImages, setPageImages] = useState<{[key: number]: string}>({}) // 이미지 URL 저장
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // 책 컨테이너(클릭 감지용)
@@ -91,7 +93,7 @@ const GenerateStory = () => {
     setImageLoadStates(prev => ({...prev, [pageIndex]: false}))
   }
 
-  // 2) 동화 & 이어읽기 (uid 복원되고 fid 있을 때 실행)
+  // 2) 동화 & 이어읽기 & 이미지 로딩 (uid 복원되고 fid 있을 때 실행)
   useEffect(() => {
     const loadFairyTale = async () => {
       const fidNum = fid ? parseInt(fid, 10) : NaN
@@ -106,6 +108,27 @@ const GenerateStory = () => {
         setLoading(true)
         const data = await getFairyTaleById(uid, fidNum)
         setFairyTale(data)
+
+        // 동화책 제목을 기반으로 이미지 폴더에서 모든 이미지 가져오기
+        const imageFolderPath = `/content/gdrive/MyDrive/Colab Notebooks/fairyTale_images/${data.title}`
+
+        try {
+          const imagesData = await getAllImages(imageFolderPath)
+          if (imagesData && imagesData.images.length > 0) {
+            const imageMap: {[key: number]: string} = {}
+
+            // 백엔드에서 받은 이미지들을 페이지 순서대로 매핑
+            imagesData.images.forEach((img, index) => {
+              imageMap[index] = `data:image/png;base64,${img.image}`
+              setImageLoadStates(prev => ({...prev, [index]: true}))
+            })
+
+            setPageImages(imageMap)
+          }
+        } catch (error) {
+          console.error('이미지 로딩 실패:', error)
+          // 이미지 로딩 실패해도 동화책은 정상 표시
+        }
 
         try {
           const resumeData = await resumeReading(uid, fidNum)
@@ -323,7 +346,7 @@ const GenerateStory = () => {
                 height={PAGE_H}
                 onFlip={handlePageFlip}>
                 {fairyTale.pages.map((p, idx) => {
-                  const showImage = !!(p.image && imageLoadStates[idx] !== false)
+                  const showImage = !!(pageImages[idx] && imageLoadStates[idx] !== false)
                   return (
                     <div
                       key={idx}
@@ -358,7 +381,7 @@ const GenerateStory = () => {
                             <div className="relative w-full h-full group">
                               <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 to-orange-400/20 rounded-xl transform rotate-1 group-hover:rotate-2 transition-transform duration-300"></div>
                               <img
-                                src={p.image!}
+                                src={pageImages[idx]}
                                 alt={`페이지 ${idx + 1}`}
                                 className="relative w-full h-full object-cover rounded-xl border-3 border-white shadow-xl transform group-hover:scale-105 transition-all duration-300"
                                 onError={() => handleImageError(idx)}
