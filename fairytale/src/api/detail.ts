@@ -9,7 +9,7 @@ export async function getFairyTaleDetail(uid: number, fid: number) {
   const tokenType = localStorage.getItem('token_type') || 'bearer'
 
   try {
-    console.log('🚀 API 호출 URL:', `${API_BASE}/users/${uid}/detail/${fid}`)
+    console.log('API 호출 URL:', `${API_BASE}/users/${uid}/detail/${fid}`)
 
     // ngrok 사용 시 필요한 헤더들 추가
     const headers = {
@@ -19,32 +19,30 @@ export async function getFairyTaleDetail(uid: number, fid: number) {
       'ngrok-skip-browser-warning': 'true' // ngrok 브라우저 경고 스킵
     }
 
-    console.log('🔑 헤더:', headers)
+    console.log('헤더:', headers)
 
     // 백엔드 엔드포인트: /users/{uid}/detail/{fid} (경로 파라미터)
     const res = await axios.get(`${API_BASE}/users/${uid}/detail/${fid}`, {
       headers: headers
     })
 
-    console.log('📡 HTTP 상태:', res.status)
-    console.log('📋 응답 헤더:', res.headers)
+    console.log('HTTP 상태:', res.status)
+    console.log('응답 헤더:', res.headers)
 
     // HTML 응답 체크
     if (res.headers['content-type']?.includes('text/html')) {
-      console.error(
-        '❌ HTML 응답을 받았습니다. API 엔드포인트가 올바르지 않을 수 있습니다.'
-      )
-      console.log('📄 HTML 응답 내용 (처음 1000자):', res.data.substring(0, 1000))
+      console.error('HTML 응답을 받았습니다. API 엔드포인트가 올바르지 않을 수 있습니다.')
+      console.log('HTML 응답 내용 (처음 1000자):', res.data.substring(0, 1000))
       throw new Error('API 엔드포인트를 찾을 수 없습니다. 백엔드 서버를 확인해주세요.')
     }
 
-    console.log('🔍 JSON 응답:', res.data)
-    console.log('🔍 응답 데이터 타입:', typeof res.data)
+    console.log('JSON 응답:', res.data)
+    console.log('응답 데이터 타입:', typeof res.data)
 
     const data = res.data
 
     // 필드별로 확인
-    console.log('📋 각 필드 확인:')
+    console.log('각 필드 확인:')
     console.log('- uid:', data.uid)
     console.log('- type:', data.type)
     console.log('- title:', data.title)
