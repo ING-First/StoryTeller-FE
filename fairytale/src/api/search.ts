@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'https://a27ab4c71fbe.ngrok-free.app'
+const API_BASE = process.env.REACT_APP_BE_API_BASE
 
 // 페이지 아이템 타입
 export interface PageItem {

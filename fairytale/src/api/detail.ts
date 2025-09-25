@@ -1,7 +1,7 @@
 import axios from 'axios'
 import {getAllImages} from './image'
 
-const API_BASE = process.env.REACT_APP_API_BASE
+const API_BASE = process.env.REACT_APP_BE_API_BASE
 
 // 동화책 상세정보 조회 (백엔드 엔드포인트에 맞게 수정)
 export async function getFairyTaleDetail(uid: number, fid: number) {

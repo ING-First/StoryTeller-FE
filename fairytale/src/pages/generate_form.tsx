@@ -1,7 +1,7 @@
 import React, {useState, useEffect, useRef} from 'react'
-import { useNavigate } from 'react-router-dom'
+import {useNavigate} from 'react-router-dom'
 import Header from '../components/Header'
-import { generate } from '../api/story_generate'
+import {generate} from '../api/story_generate'
 
 const StoryForm = () => {
   const [characterName, setCharacterName] = useState('')
@@ -17,7 +17,7 @@ const StoryForm = () => {
 
     const uid = localStorage.getItem('uid')
     if (!uid) {
-      alert("로그인이 필요합니다.")
+      alert('로그인이 필요합니다.')
       navigate('/')
     }
   }, [navigate])
@@ -27,39 +27,29 @@ const StoryForm = () => {
     console.log('폼 제출:', {characterName, age, genre})
 
     if (!characterName) {
-      alert("주인공 이름을 입력해주세요.");
-      return;
+      alert('주인공 이름을 입력해주세요.')
+      return
     }
 
     if (!age) {
-      alert("나이를 입력해주세요.");
-      return;
+      alert('나이를 입력해주세요.')
+      return
     }
 
     if (!genre) {
-      alert("장르를 입력해주세요.");
-      return;
+      alert('장르를 입력해주세요.')
+      return
     }
 
-    try {
-      setLoading(true)
-      const res = await generate({
-        name: characterName,
-        age: Number(age),
-        genre: genre,
-        uid: localStorage.uid,
-        type: 2
-      });
-      console.log(res);
-      alert(res.message);
-      window.location.href = `/generate_story/${res.fid}`;
-    } catch (err: any) {
-      console.error(err);
-      alert("동화생성을 샐패했습니다.");
-    } finally {
-      setLoading(false)  // 로딩 종료
-    }
-  };
+    // 스트리밍 모드로 이동
+    const searchParams = new URLSearchParams({
+      name: characterName,
+      age: age,
+      genre: genre
+    })
+
+    navigate(`/story?${searchParams.toString()}`)
+  }
 
   return (
     <div className="min-h-screen bg-pink-50">
@@ -139,10 +129,9 @@ const StoryForm = () => {
               <input
                 type="submit"
                 className="font-pinkfong bg-pink-300 text-pink-800 text-3xl px-16 py-4 rounded-full font-bold shadow-md hover:bg-pink-400 transition-colors"
-                value={loading ? "생성 중..." : "동화 생성하기"}
+                value={loading ? '생성 중...' : '동화 생성하기'}
               />
             </div>
-            
           </form>
         </section>
       </div>
