@@ -14,12 +14,13 @@ import NoMatch from '../routes/NoMatch'
 
 export default function RoutesSetup() {
   return (
+    // RoutesSetup.tsx 수정
     <Routes>
-      {/* <Route path="*" element={<NoMatch />} /> */}
       <Route path="/" element={<Homepage />} />
       <Route path="/mypage" element={<Mypage />} />
       <Route path="/voice_register" element={<VoiceRegister />} />
       <Route path="/generate_form" element={<StoryForm />} />
+      <Route path="/story" element={<StoryGenerator />} /> {/* 추가 */}
       <Route path="/generate_story/:fid" element={<StoryGenerator />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/login" element={<LoginPage />} />

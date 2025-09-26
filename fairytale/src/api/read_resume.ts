@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // 환경변수 기반 엔드포인트 호스팅 주소 반영
-const API_BASE = process.env.REACT_APP_API_BASE
+const API_BASE = process.env.REACT_APP_BE_API_BASE
 
 // 이어 읽기
 export async function resumeReading(uid: number, fid: number) {
