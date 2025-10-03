@@ -53,7 +53,7 @@ const FairyTaleList: React.FC = () => {
       <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 기록</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           {fairyTales.map(tale => (
-            <Link key={tale.fid} to={`/detail/${tale.fid}`} className="cursor-pointer">
+            <Link key={tale.fid} to={`/generate_story/${tale.fid}`} className="cursor-pointer">
               <FairyTaleCard
                 imageSrc={tale.image_url}
                 title={tale.title}
