@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {useState, useEffect} from 'react'
 import Header from '../components/Header'
 import {data, useNavigate} from 'react-router-dom'
 import {delete_user} from '../api/delete'
@@ -8,25 +8,28 @@ import {user_update_search} from '../api/update_info'
 const ProfileEditPage = () => {
   // 실제로는 로그인한 사용자의 정보를 상태로 가져옵니다.
   const [userId, setUserId] = useState('')
-  const [userName, setUserName] = useState('KKURI')
+  const [userName, setUserName] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
   const navigate = useNavigate()
 
-  const userInfo = async () => {
-    try {
-      const data = await user_update_search({uid: Number(localStorage.getItem("uid"))})
-      setUserId(data.id)
-      setUserName(data.name)
-    } catch (err) {
-      alert('유저 정보를 불러오는데 실패했습니다.')
-      console.error(err)
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const data = await user_update_search({uid: Number(localStorage.getItem("uid"))})
+        setUserId(data.id)
+        setUserName(data.name)
+      } catch (err) {
+        alert('유저 정보를 불러오는데 실패했습니다.')
+        console.error(err)
+      }
     }
-  }
 
-  userInfo()
+    fetchUserInfo()
+  }, [])
+
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,6 +37,7 @@ const ProfileEditPage = () => {
       const res = await update_user({
         uid: Number(localStorage.getItem("uid")),
         id: userId,
+        name: userName,
         currentPasswd: currentPassword,
         passwd: newPassword,
         repasswd: confirmPassword,
@@ -41,10 +45,15 @@ const ProfileEditPage = () => {
       });
       console.log(res);
       alert('프로필 정보가 성공적으로 업데이트되었습니다.')
+      localStorage.setItem("name", userName);
       navigate('/mypage') // 마이페이지로 이동
     } catch (err: any) {
       console.error(err);
-      alert("프로필 정보 업데이트를 실패했습니다.");
+      if (err.response && err.response.data && err.response.data.detail) {
+        alert(err.response.data.detail); // 서버에서 보낸 구체적인 에러 메시지
+      } else {
+        alert("프로필 정보 업데이트를 실패했습니다.");
+      }
     }
   }
 
@@ -66,7 +75,11 @@ const ProfileEditPage = () => {
         
       } catch (err: any) {
         console.error(err);
-        alert("회원 탈퇴를 실패했습니다.");
+        if (err.response && err.response.data && err.response.data.detail) {
+          alert(err.response.data.detail);
+        } else {
+          alert("회원 탈퇴를 실패했습니다.");
+        }
       }
     }
   }
