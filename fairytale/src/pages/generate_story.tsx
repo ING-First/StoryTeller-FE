@@ -96,7 +96,7 @@ const GenerateStory = () => {
   // 2) 모드 결정: fid가 있으면 기존 동화책 보기, 없으면 스트리밍 생성
   const isStreamMode = !fid
 
-  // 3) 스트리밍 모드 처리 (기본 모드)
+  // 3) 스트리밍 모드 처리
   useEffect(() => {
     if (isStreamMode && uid) {
       const urlParams = new URLSearchParams(window.location.search)
@@ -107,7 +107,6 @@ const GenerateStory = () => {
       if (name && age && genre) {
         startStreamGeneration({name, age, genre, uid, type: 2})
       } else {
-        // 파라미터가 없으면 스트리밍 설정 페이지로 리디렉션하거나 기본값 사용
         setError('동화 생성에 필요한 정보가 없습니다. 다시 시도해주세요.')
         setLoading(false)
       }
@@ -155,7 +154,7 @@ const GenerateStory = () => {
           setCurrentPage(pageData.page - 1)
           setLoading(false)
         } else if (pageData.completed) {
-          // 스트리밍 완료 - React Router로 네비게이션
+          // 스트리밍 완료
           setIsGenerating(false)
           setIsStreamCompleted(true)
           setCompletedFid(pageData.fid)
@@ -163,16 +162,17 @@ const GenerateStory = () => {
 
           console.log('동화 생성 완료:', pageData.fid)
 
-          // React Router를 사용한 네비게이션
-          navigate(`/generate_story/${pageData.fid}`, {
-            replace: true,
-            state: {
+          // URL만 업데이트 (페이지 리로드 없이)
+          window.history.replaceState(
+            {
               fromStreaming: true,
               streamedPages: streamingPages,
               streamedTitle: streamTitle,
               streamedImages: pageImages
-            }
-          })
+            },
+            '',
+            `/generate_story/${pageData.fid}`
+          )
         } else if (pageData.error) {
           setIsGenerating(false)
           setLoading(false)
@@ -208,6 +208,7 @@ const GenerateStory = () => {
         setStreamTitle(navigationState.streamedTitle || '')
         setPageImages(navigationState.streamedImages || {})
         setIsStreamCompleted(true)
+        setCompletedFid(fid)
         setLoading(false)
         return
       }
@@ -344,9 +345,7 @@ const GenerateStory = () => {
           )
           return
         }
-        // 스트리밍 중단 로직
         setIsGenerating(false)
-        // 필요시 WebSocket 연결 종료 등
       }
     }
 
@@ -433,7 +432,6 @@ const GenerateStory = () => {
 
   // 표시할 데이터 결정
   const displayPages = isStreamMode ? streamingPages : fairyTale?.pages || []
-
   const displayTitle = isStreamMode ? streamTitle : fairyTale?.title
 
   const totalPairs = Math.ceil(displayPages.length / 2)
@@ -741,20 +739,6 @@ const GenerateStory = () => {
             </button>
           </div>
         </div>
-
-        {/* 닫기/홈 버튼 */}
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="fixed top-4 right-4 p-2 rounded-full bg-black/20 hover:bg-black/30 text-white transition-colors z-10">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
       </div>
     </div>
   )
