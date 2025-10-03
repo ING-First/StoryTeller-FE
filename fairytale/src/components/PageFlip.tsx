@@ -5,12 +5,13 @@ import HTMLFlipBook from 'react-pageflip'
 interface PageFlipProps {
   width?: number
   height?: number
+  startPage?: number
   children?: React.ReactNode
   onFlip?: (e: any) => void
 }
 
 const PageFlip = forwardRef<any, PageFlipProps>(
-  ({width = 800, height = 1000, children, onFlip}, ref) => {
+  ({width = 800, height = 1000, startPage = 0, children, onFlip}, ref) => {
     const FlipBookComponent = HTMLFlipBook as any
 
     return (
@@ -36,7 +37,7 @@ const PageFlip = forwardRef<any, PageFlipProps>(
         clickEventForward={true}
         useMouseEvents={true}
         renderOnlyPageLengthChange={false}
-        startPage={0}
+        startPage={startPage}
         showPageCorners={true}
         disableFlipByClick={false}
         onFlip={onFlip}
