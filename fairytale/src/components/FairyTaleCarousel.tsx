@@ -2,7 +2,7 @@
 import React, {useState, useEffect} from 'react'
 import FairyTaleCard from './FairyTaleCard'
 import {Link} from 'react-router-dom'
-import {fetchDefaultFairyTales, FairyTale} from '../api/books'
+import {fetchDefaultFairyTales, FairyTale, fetchMyFairyTales} from '../api/books'
 import {getFairyTaleList, saveFairyTaleList} from '../utils/storyCache'
 
 const FairyTaleCarousel = () => {
@@ -11,6 +11,8 @@ const FairyTaleCarousel = () => {
   const [offset, setOffset] = useState(4)
   const [isTransitioning, setIsTransitioning] = useState(true)
   const [loading, setLoading] = useState(true)
+  // check login
+  const isLogginedIn = !!localStorage.getItem('token')
 
   useEffect(() => {
     const getFairyTales = async () => {
@@ -23,7 +25,10 @@ const FairyTaleCarousel = () => {
           return
         }
 
-        const dbTales = await fetchDefaultFairyTales()
+        const dbTales = isLogginedIn
+          ? await fetchMyFairyTales()
+          : await fetchDefaultFairyTales()
+
         setInitialFairyTales(dbTales)
 
         await saveFairyTaleList(dbTales)
@@ -35,7 +40,7 @@ const FairyTaleCarousel = () => {
       }
     }
     getFairyTales()
-  }, [])
+  }, [isLogginedIn])
 
   useEffect(() => {
     if (initialFairyTales.length > 0) {
@@ -74,7 +79,7 @@ const FairyTaleCarousel = () => {
   }, [offset, items, initialFairyTales])
 
   if (loading) {
-    return <div className="font-pinkfong text-center py-10">로딩 중...</div>
+    return <div className="py-10 text-center font-pinkfong">로딩 중...</div>
   }
 
   if (initialFairyTales.length === 0) {
