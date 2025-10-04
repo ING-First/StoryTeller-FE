@@ -3,6 +3,7 @@ import React, {useState, useEffect} from 'react'
 import FairyTaleCard from './FairyTaleCard'
 import {Link} from 'react-router-dom'
 import {check_records, FairyTale} from '../api/records'
+import {getReadingRecords, saveReadingRecords} from '../utils/storyCache'
 
 const FairyTaleList: React.FC = () => {
   const [fairyTales, setFairyTales] = useState<FairyTale[]>([])
@@ -13,10 +14,22 @@ const FairyTaleList: React.FC = () => {
     const fetchFairyTales = async () => {
       try {
         setIsLoading(true)
-        const data = await check_records(localStorage.uid)
+        const uid = localStorage.uid
+
+        const cachedRecords = await getReadingRecords(uid)
+
+        if (cachedRecords) {
+          setFairyTales(cachedRecords)
+          setIsLoading(false)
+          return
+        }
+
+        const data = await check_records(uid)
         setFairyTales(data.records)
+
+        await saveReadingRecords(uid, data.records)
       } catch (err) {
-        setError("읽은 기록이 없습니다.")
+        setError('읽은 기록이 없습니다.')
         console.error(err)
       } finally {
         setIsLoading(false)
@@ -29,9 +42,11 @@ const FairyTaleList: React.FC = () => {
   if (isLoading) {
     return (
       <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
-        <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 기록</h3>
+        <h3 className="mb-6 text-xl font-bold text-gray-800 font-pinkfong">
+          나의 독서 기록
+        </h3>
         <div className="flex items-center justify-center h-32">
-          <div className="text-gray-500">로딩 중...</div>
+          <div className="text-gray-500 font-pinkfong">로딩 중...</div>
         </div>
       </section>
     )
@@ -40,9 +55,11 @@ const FairyTaleList: React.FC = () => {
   if (error) {
     return (
       <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
-        <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 기록</h3>
+        <h3 className="mb-6 text-xl font-bold text-gray-800 font-pinkfong">
+          나의 독서 기록
+        </h3>
         <div className="flex justify-center items-center h-32">
-          <div className="text-gray-500">{error}</div>
+          <div className="text-gray-500 font-pinkfong">{error}</div>
         </div>
       </section>
     )
@@ -50,19 +67,21 @@ const FairyTaleList: React.FC = () => {
 
   return (
     <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
-      <h3 className="mb-6 text-xl font-bold text-gray-800">나의 동화 기록</h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
-          {fairyTales.map(tale => (
-            <Link key={tale.fid} to={`/generate_story/${tale.fid}`} className="cursor-pointer">
-              <FairyTaleCard
-                imageSrc={tale.image_url}
-                title={tale.title}
-                date={tale.create_date}
-                subText={tale.summary}
-              />
-            </Link>
-          ))}
-        </div>
+      <h3 className="mb-6 text-xl font-bold text-gray-800 font-pinkfong">
+        나의 독서 기록
+      </h3>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+        {fairyTales.map(tale => (
+          <Link key={tale.fid} to={`/detail/${tale.fid}`} className="cursor-pointer">
+            <FairyTaleCard
+              imageSrc={tale.image_url}
+              title={tale.title}
+              date={tale.create_date}
+              subText={tale.summary}
+            />
+          </Link>
+        ))}
+      </div>
     </section>
   )
 }
