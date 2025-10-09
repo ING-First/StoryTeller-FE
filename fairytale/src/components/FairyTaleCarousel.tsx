@@ -11,27 +11,43 @@ const FairyTaleCarousel = () => {
   const [offset, setOffset] = useState(4)
   const [isTransitioning, setIsTransitioning] = useState(true)
   const [loading, setLoading] = useState(true)
-  // check login
-  const isLogginedIn = !!localStorage.getItem('token')
+
+  // 로그인 상태 확인
+  const isLoggedIn = !!(localStorage.getItem('token') && localStorage.getItem('uid'))
+  const cacheType = isLoggedIn ? 'user' : 'default'
 
   useEffect(() => {
     const getFairyTales = async () => {
       try {
-        const cachedList = await getFairyTaleList()
+        console.log(`🔍 동화 로드 시작 (${cacheType})`)
 
-        if (cachedList) {
+        // 1. 캐시 먼저 확인
+        const cachedList = await getFairyTaleList(cacheType)
+
+        if (cachedList && cachedList.length > 0) {
+          console.log(`✅ 캐시에서 로드: ${cachedList.length}개 (${cacheType})`)
           setInitialFairyTales(cachedList)
           setLoading(false)
-          return
         }
 
-        const dbTales = isLogginedIn
+        // 2. 서버에서 최신 데이터 가져오기 (백그라운드)
+        const dbTales = isLoggedIn
           ? await fetchMyFairyTales()
           : await fetchDefaultFairyTales()
 
-        setInitialFairyTales(dbTales)
+        console.log(`🌐 서버에서 로드: ${dbTales.length}개 (${cacheType})`)
 
-        await saveFairyTaleList(dbTales)
+        // 3. 캐시와 비교해서 다르면 업데이트
+        const isSame =
+          cachedList &&
+          cachedList.length === dbTales.length &&
+          JSON.stringify(cachedList) === JSON.stringify(dbTales)
+
+        if (!isSame) {
+          console.log(`🔄 데이터 업데이트 (${cacheType})`)
+          setInitialFairyTales(dbTales)
+          await saveFairyTaleList(cacheType, dbTales)
+        }
       } catch (error) {
         console.error('Failed to load fairy tales from API', error)
         setInitialFairyTales([])
@@ -39,8 +55,9 @@ const FairyTaleCarousel = () => {
         setLoading(false)
       }
     }
+
     getFairyTales()
-  }, [isLogginedIn])
+  }, [isLoggedIn, cacheType])
 
   useEffect(() => {
     if (initialFairyTales.length > 0) {

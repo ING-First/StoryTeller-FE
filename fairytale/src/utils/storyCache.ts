@@ -98,35 +98,41 @@ export const getFairyTaleMeta = async (fid: string): Promise<CachedMeta | null> 
   }
 }
 
-// ===== 동화책 리스트 캐싱 =====
+// ===== 동화책 리스트 캐싱 (로그인 상태별로 분리) =====
 
-const LIST_CACHE_KEY = 'fairytale_list'
+const getListCacheKey = (type: 'default' | 'user') => `fairytale_list_${type}`
 
-export const saveFairyTaleList = async (list: any[]) => {
+export const saveFairyTaleList = async (type: 'default' | 'user', list: any[]) => {
   try {
-    await metaCache.setItem(LIST_CACHE_KEY, {
+    await metaCache.setItem(getListCacheKey(type), {
       data: list,
       timestamp: Date.now()
     })
-    console.log('동화책 리스트 캐시 저장 완료')
+    console.log(`동화책 리스트 캐시 저장 완료 (${type})`)
   } catch (error) {
     console.error('리스트 캐시 저장 실패:', error)
   }
 }
 
-export const getFairyTaleList = async (): Promise<any[] | null> => {
+export const getFairyTaleList = async (
+  type: 'default' | 'user' = 'default'
+): Promise<any[] | null> => {
   try {
-    const cached = await metaCache.getItem<CachedData<any[]>>(LIST_CACHE_KEY)
+    const cached = await metaCache.getItem<CachedData<any[]>>(getListCacheKey(type))
 
-    if (!cached) return null
-
-    const maxAge = 60 * 60 * 1000 // 1시간
-    if (Date.now() - cached.timestamp > maxAge) {
-      await metaCache.removeItem(LIST_CACHE_KEY)
+    if (!cached) {
+      console.log(`캐시 없음 (${type})`)
       return null
     }
 
-    console.log('캐시에서 동화책 리스트 로드됨')
+    const maxAge = 60 * 60 * 1000 // 1시간
+    if (Date.now() - cached.timestamp > maxAge) {
+      console.log(`캐시 만료 (${type})`)
+      await metaCache.removeItem(getListCacheKey(type))
+      return null
+    }
+
+    console.log(`캐시에서 동화책 리스트 로드됨 (${type})`)
     return cached.data
   } catch (error) {
     console.error('리스트 캐시 로드 실패:', error)
@@ -249,5 +255,15 @@ export const clearFairyTaleCache = async (fid: string) => {
     console.log(`동화책 ${fid} 캐시 삭제 완료`)
   } catch (error) {
     console.error('캐시 삭제 실패:', error)
+  }
+}
+
+// ===== 로그아웃 시 사용자 캐시 삭제 =====
+export const clearUserCache = async () => {
+  try {
+    await metaCache.removeItem(getListCacheKey('user'))
+    console.log('사용자 동화 리스트 캐시 삭제 완료')
+  } catch (error) {
+    console.error('사용자 캐시 삭제 실패:', error)
   }
 }
