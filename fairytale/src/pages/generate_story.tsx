@@ -75,6 +75,7 @@ const GenerateStory = () => {
   const pageFlipRef = useRef<any>(null)
   const progressUpdateTimer = useRef<NodeJS.Timeout | null>(null)
   const currentPageRef = useRef<number>(0)
+  const hasStartedGeneration = useRef(false)
 
   // 앱 시작 시 오래된 캐시 정리
   useEffect(() => {
@@ -200,197 +201,218 @@ const GenerateStory = () => {
     }
   }, [uid, fid, completedFid])
 
-  const startStreamGeneration = useCallback(
-    async (storyData: any) => {
-      setIsGenerating(true)
-      setStreamingPages([])
-      setLoading(true)
-      setIsStreamCompleted(false)
-
-      try {
-        await generateStoryStream(storyData, async pageData => {
-          if (pageData.page) {
-            const newPage: StreamingPage = {
-              text: pageData.content,
-              page: pageData.page
-            }
-
-            if (pageData.title && !streamTitle) {
-              setStreamTitle(pageData.title)
-            }
-
-            setStreamingPages(prev => [...prev, newPage])
-
-            if (pageData.image) {
-              setPageImages(prev => ({
-                ...prev,
-                [pageData.page - 1]: pageData.image
-              }))
-              setImageLoadStates(prev => ({
-                ...prev,
-                [pageData.page - 1]: true
-              }))
-            }
-
-            setCurrentPage(pageData.page - 1)
-            setLoading(false)
-          } else if (pageData.completed) {
-            setIsGenerating(false)
-            setIsStreamCompleted(true)
-            setCompletedFid(pageData.fid)
-            setLoading(false)
-
-            console.log('동화 생성 완료:', pageData.fid)
-
-            // 생성 완료 후 캐시 저장
-            if (pageData.fid && streamTitle && streamingPages.length > 0) {
-              await saveFairyTaleMeta(pageData.fid, streamTitle, streamingPages)
-
-              // 이미지도 캐시에 저장
-              const imageEntries = Object.entries(pageImages)
-              for (const [idx, imageData] of imageEntries) {
-                await saveImage(pageData.fid, parseInt(idx), imageData as string)
-              }
-              console.log('캐시 저장 완료')
-            }
-
-            window.history.replaceState(
-              {
-                fromStreaming: true,
-                streamedPages: streamingPages,
-                streamedTitle: streamTitle,
-                streamedImages: pageImages
-              },
-              '',
-              `/generate_story/${pageData.fid}`
-            )
-          } else if (pageData.error) {
-            setIsGenerating(false)
-            setLoading(false)
-            setError(pageData.error)
-          }
-        })
-      } catch (error) {
-        setIsGenerating(false)
-        setLoading(false)
-        setError('동화 생성에 실패했습니다.')
-        console.error('스트리밍 에러:', error)
-      }
-    },
-    [streamTitle, streamingPages, pageImages]
-  )
-
-  const loadExistingFairyTale = useCallback(async () => {
-    const fidNum = fid ? parseInt(fid, 10) : NaN
-
-    if (!uid || !fid || Number.isNaN(fidNum)) {
-      setError('잘못된 요청입니다.')
-      setLoading(false)
-      return
-    }
+  const startStreamGeneration = useCallback(async (storyData: any) => {
+    setIsGenerating(true)
+    setStreamingPages([])
+    setLoading(true)
+    setIsStreamCompleted(false)
 
     try {
-      setLoading(true)
+      let capturedTitle = ''
+      let capturedPages: StreamingPage[] = []
+      let capturedImages: {[key: number]: string} = {}
 
-      const navigationState = navigate.length ? null : window.history.state?.usr
+      await generateStoryStream(storyData, async pageData => {
+        if (pageData.page) {
+          const newPage: StreamingPage = {
+            text: pageData.content,
+            page: pageData.page
+          }
 
-      if (navigationState?.fromStreaming) {
-        setStreamingPages(navigationState.streamedPages || [])
-        setStreamTitle(navigationState.streamedTitle || '')
-        setPageImages(navigationState.streamedImages || {})
-        setIsStreamCompleted(true)
-        setCompletedFid(fid)
-        setIsDataReady(true)
+          if (pageData.title && !capturedTitle) {
+            capturedTitle = pageData.title
+            setStreamTitle(pageData.title)
+          }
+
+          capturedPages = [...capturedPages, newPage]
+          setStreamingPages(capturedPages)
+
+          // 첫 페이지가 생성되면 데이터 준비 완료
+          if (capturedPages.length === 1) {
+            setIsDataReady(true)
+          }
+
+          if (pageData.image) {
+            capturedImages = {
+              ...capturedImages,
+              [pageData.page - 1]: pageData.image
+            }
+            setPageImages(capturedImages)
+            setImageLoadStates(prev => ({
+              ...prev,
+              [pageData.page - 1]: true
+            }))
+          }
+
+          setCurrentPage(pageData.page - 1)
+          setLoading(false)
+        } else if (pageData.completed) {
+          setIsGenerating(false)
+          setIsStreamCompleted(true)
+          setCompletedFid(pageData.fid)
+          setLoading(false)
+
+          console.log('동화 생성 완료:', pageData.fid)
+
+          // 생성 완료 후 캐시 저장
+          if (pageData.fid && capturedTitle && capturedPages.length > 0) {
+            await saveFairyTaleMeta(pageData.fid, capturedTitle, capturedPages)
+
+            // 이미지도 캐시에 저장
+            const imageEntries = Object.entries(capturedImages)
+            for (const [idx, imageData] of imageEntries) {
+              await saveImage(pageData.fid, parseInt(idx), imageData as string)
+            }
+            console.log('캐시 저장 완료')
+
+            // 독서 상황 업데이트 (첫 페이지로 설정하여 나중에 읽을 수 있도록)
+            try {
+              await updateReadingProgress(storyData.uid, parseInt(pageData.fid, 10), 1)
+              console.log('독서 상황 업데이트 완료: Clip 1로 설정')
+            } catch (error) {
+              console.error('독서 상황 업데이트 실패:', error)
+            }
+          }
+
+          window.history.replaceState(
+            {
+              fromStreaming: true,
+              streamedPages: capturedPages,
+              streamedTitle: capturedTitle,
+              streamedImages: capturedImages
+            },
+            '',
+            `/generate_story/${pageData.fid}`
+          )
+        } else if (pageData.error) {
+          setIsGenerating(false)
+          setLoading(false)
+          setError(pageData.error)
+        }
+      })
+    } catch (error) {
+      setIsGenerating(false)
+      setLoading(false)
+      setError('동화 생성에 실패했습니다.')
+      console.error('스트리밍 에러:', error)
+    }
+  }, [])
+
+  const loadExistingFairyTale = useCallback(
+    async (currentFid: string) => {
+      const fidNum = currentFid ? parseInt(currentFid, 10) : NaN
+
+      if (!uid || !currentFid || Number.isNaN(fidNum)) {
+        setError('잘못된 요청입니다.')
         setLoading(false)
         return
       }
 
-      // 1. 먼저 캐시에서 메타데이터 확인
-      const cachedMeta = await getFairyTaleMeta(fid)
-
-      // 2. 서버에서 동화책 데이터 가져오기
-      const data = await getFairyTaleById(uid, fidNum)
-      setFairyTale(data)
-      setIsDataReady(true)
-
-      // 3. 캐시된 이미지 먼저 로드
-      let hasAllCachedImages = true
-      const imageMap: {[key: number]: string} = {}
-
-      for (let i = 0; i < data.pages.length; i++) {
-        const cachedImage = await getImage(fid, i)
-        if (cachedImage) {
-          imageMap[i] = cachedImage
-          setImageLoadStates(prev => ({...prev, [i]: true}))
-        } else {
-          hasAllCachedImages = false
-        }
-      }
-
-      if (Object.keys(imageMap).length > 0) {
-        setPageImages(imageMap)
-        console.log(`캐시에서 ${Object.keys(imageMap).length}개 이미지 로드됨`)
-      }
-
-      // 4. 캐시되지 않은 이미지가 있으면 서버에서 가져오기
-      if (!hasAllCachedImages) {
-        const imageFolderPath = `/content/gdrive/MyDrive/Colab Notebooks/fairyTale_images/${data.title}`
-
-        try {
-          const imagesData = await getAllImages(imageFolderPath)
-          if (imagesData && imagesData.images.length > 0) {
-            for (let index = 0; index < imagesData.images.length; index++) {
-              const img = imagesData.images[index]
-              const imageData = `data:image/png;base64,${img.image}`
-
-              if (!imageMap[index]) {
-                imageMap[index] = imageData
-                setImageLoadStates(prev => ({...prev, [index]: true}))
-                await saveImage(fid, index, imageData)
-              }
-            }
-            setPageImages(imageMap)
-            console.log('서버에서 추가 이미지 로드 및 캐시 저장 완료')
-          }
-        } catch (error) {
-          console.error('이미지 로딩 실패:', error)
-        }
-      }
-
-      // 5. 메타데이터가 캐시에 없으면 저장
-      if (!cachedMeta && data.title && data.pages) {
-        await saveFairyTaleMeta(fid, data.title, data.pages)
-      }
-
-      // 6. 이어읽기 처리
       try {
-        const resumeData = await resumeReading(uid, fidNum)
-        const clipNumber = resumeData?.next_page ?? 1
-        const startIdx = (clipNumber - 1) * 2
+        setLoading(true)
 
-        console.log(`이어읽기: clipNumber=${clipNumber}, startIdx=${startIdx}`)
+        const navigationState = navigate.length ? null : window.history.state?.usr
 
-        setLoading(false)
-        setCurrentPage(startIdx)
-        setInitialPage(startIdx)
-      } catch (err) {
-        console.error('이어읽기 실패:', err)
+        if (navigationState?.fromStreaming) {
+          setStreamingPages(navigationState.streamedPages || [])
+          setStreamTitle(navigationState.streamedTitle || '')
+          setPageImages(navigationState.streamedImages || {})
+          setIsStreamCompleted(true)
+          setCompletedFid(currentFid)
+          setIsDataReady(true)
+          setLoading(false)
+          return
+        }
+
+        // 1. 먼저 캐시에서 메타데이터 확인
+        const cachedMeta = await getFairyTaleMeta(currentFid)
+
+        // 2. 서버에서 동화책 데이터 가져오기
+        const data = await getFairyTaleById(uid, fidNum)
+        setFairyTale(data)
+        setIsDataReady(true)
+
+        // 3. 캐시된 이미지 먼저 로드
+        let hasAllCachedImages = true
+        const imageMap: {[key: number]: string} = {}
+
+        for (let i = 0; i < data.pages.length; i++) {
+          const cachedImage = await getImage(currentFid, i)
+          if (cachedImage) {
+            imageMap[i] = cachedImage
+            setImageLoadStates(prev => ({...prev, [i]: true}))
+          } else {
+            hasAllCachedImages = false
+          }
+        }
+
+        if (Object.keys(imageMap).length > 0) {
+          setPageImages(imageMap)
+          console.log(`캐시에서 ${Object.keys(imageMap).length}개 이미지 로드됨`)
+        }
+
+        // 4. 캐시되지 않은 이미지가 있으면 서버에서 가져오기
+        if (!hasAllCachedImages) {
+          const imageFolderPath = `/content/gdrive/MyDrive/Colab Notebooks/fairyTale_images/${data.title}`
+
+          try {
+            const imagesData = await getAllImages(imageFolderPath)
+            if (imagesData && imagesData.images.length > 0) {
+              for (let index = 0; index < imagesData.images.length; index++) {
+                const img = imagesData.images[index]
+                const imageData = `data:image/png;base64,${img.image}`
+
+                if (!imageMap[index]) {
+                  imageMap[index] = imageData
+                  setImageLoadStates(prev => ({...prev, [index]: true}))
+                  await saveImage(currentFid, index, imageData)
+                }
+              }
+              setPageImages(imageMap)
+              console.log('서버에서 추가 이미지 로드 및 캐시 저장 완료')
+            }
+          } catch (error) {
+            console.error('이미지 로딩 실패:', error)
+          }
+        }
+
+        // 5. 메타데이터가 캐시에 없으면 저장
+        if (!cachedMeta && data.title && data.pages) {
+          await saveFairyTaleMeta(currentFid, data.title, data.pages)
+        }
+
+        // 6. 이어읽기 처리
+        try {
+          const resumeData = await resumeReading(uid, fidNum)
+          const clipNumber = resumeData?.next_page ?? 1
+          const startIdx = (clipNumber - 1) * 2
+
+          console.log(`이어읽기: clipNumber=${clipNumber}, startIdx=${startIdx}`)
+
+          setLoading(false)
+          setCurrentPage(startIdx)
+          setInitialPage(startIdx)
+        } catch (err) {
+          console.error('이어읽기 실패:', err)
+          setLoading(false)
+        }
+      } catch (err: any) {
+        setError(err.message || '동화책을 불러오는데 실패했습니다.')
         setLoading(false)
       }
-    } catch (err: any) {
-      setError(err.message || '동화책을 불러오는데 실패했습니다.')
-      setLoading(false)
-    }
-  }, [uid, fid, navigate])
+    },
+    [uid, navigate]
+  )
 
   useEffect(() => {
-    if (isStreamMode && uid) {
+    if (isStreamMode && uid && !hasStartedGeneration.current) {
       const urlParams = new URLSearchParams(window.location.search)
       const name = urlParams.get('name') || ''
       const age = parseInt(urlParams.get('age') || '7')
       const genre = urlParams.get('genre') || ''
 
       if (name && age && genre) {
+        hasStartedGeneration.current = true
         startStreamGeneration({name, age, genre, uid, type: 2})
       } else {
         setError('동화 생성에 필요한 정보가 없습니다. 다시 시도해주세요.')
@@ -401,7 +423,7 @@ const GenerateStory = () => {
 
   useEffect(() => {
     if (!isStreamMode && uid && fid) {
-      loadExistingFairyTale()
+      loadExistingFairyTale(fid)
     }
   }, [isStreamMode, uid, fid, loadExistingFairyTale])
 

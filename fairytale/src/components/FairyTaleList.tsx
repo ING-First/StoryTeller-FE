@@ -16,30 +16,35 @@ const FairyTaleList: React.FC = () => {
         setIsLoading(true)
         const uid = localStorage.uid
 
+        // 1. 캐시된 데이터를 먼저 표시 (빠른 초기 렌더링)
         const cachedRecords = await getReadingRecords(uid)
-
-        if (cachedRecords) {
+        if (cachedRecords && cachedRecords.length > 0) {
           setFairyTales(cachedRecords)
           setIsLoading(false)
-          return
         }
 
+        // 2. 서버에서 최신 데이터 가져오기 (백그라운드)
         const data = await check_records(uid)
+
+        // 3. 서버 데이터로 업데이트
         setFairyTales(data.records)
 
+        // 4. 캐시 갱신
         await saveReadingRecords(uid, data.records)
+
+        setIsLoading(false)
       } catch (err) {
         setError('읽은 기록이 없습니다.')
         console.error(err)
-      } finally {
         setIsLoading(false)
       }
     }
 
     fetchFairyTales()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (isLoading) {
+  if (isLoading && fairyTales.length === 0) {
     return (
       <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
         <h3 className="mb-6 text-xl font-bold text-gray-800 font-pinkfong">
@@ -52,7 +57,7 @@ const FairyTaleList: React.FC = () => {
     )
   }
 
-  if (error) {
+  if (error && fairyTales.length === 0) {
     return (
       <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
         <h3 className="mb-6 text-xl font-bold text-gray-800 font-pinkfong">
@@ -69,6 +74,9 @@ const FairyTaleList: React.FC = () => {
     <section className="p-6 mt-10 bg-white border border-gray-200 shadow-xl rounded-2xl">
       <h3 className="mb-6 text-xl font-bold text-gray-800 font-pinkfong">
         나의 독서 기록
+        {isLoading && (
+          <span className="ml-2 text-sm text-gray-400 animate-pulse">업데이트 중...</span>
+        )}
       </h3>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
         {fairyTales.map(tale => (
