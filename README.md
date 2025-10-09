@@ -34,3 +34,8 @@
 | **Frontend**       |  **Backend**     | **AI**     | **Database**     | **TTS**     | **server**     |
 |------------|--------------|--------------|--------------|--------------|--------------|
 | [![My Skills](https://skillicons.dev/icons?i=react)](https://skillicons.dev) | [![My Skills](https://skillicons.dev/icons?i=fastapi)](https://skillicons.dev) | [![My Skills](https://skillicons.dev/icons?i=pytorch)](https://skillicons.dev) <img width="50" height="50" alt="스크린샷 2025-08-20 20 08 26" src="https://github.com/user-attachments/assets/e660b773-7cf3-484c-878b-afa4eb04356d" /> | [![My Skills](https://skillicons.dev/icons?i=mysql)](https://skillicons.dev) | <img width="70" height="50" alt="스크린샷 2025-08-20 20 11 41" src="https://github.com/user-attachments/assets/5e12cede-e606-40cb-84f5-60509bc6517f" />  | <img width="70" height="50" alt="스크린샷 2025-08-20 20 13 39" src="https://github.com/user-attachments/assets/a556b245-af0b-48eb-ae35-5d2feaeedc4e" /> | 
+---
+## 라이선스
+
+이 프로젝트는 [MIT License](./LICENSE)에 따라 배포됩니다.  
+Copyright (c) 2025 아이엔지
