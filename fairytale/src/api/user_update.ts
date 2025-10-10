@@ -3,6 +3,7 @@ import api from "./index";
 export async function update_user(user: {
   uid: number;
   id: string;
+  name: string;
   currentPasswd: string;
   passwd: string;
   repasswd: string;

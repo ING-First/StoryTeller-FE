@@ -31,6 +31,29 @@ export const fetchDefaultFairyTales = async (): Promise<FairyTale[]> => {
 }
 
 /**
+ * DB에 저장된 자신의 동화 목록을 가져오는 함수
+ *
+ */
+export const fetchMyFairyTales = async (): Promise<FairyTale[]> => {
+  try {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      throw new Error('No token found')
+    }
+
+    const response = await api.get<FairyTaleResponse>('/api/fairy_tales/my', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    return response.data.data
+  } catch (error) {
+    console.error('Failed to fetch my fairy tales:', error)
+    throw error
+  }
+}
+
+/**
  * 특정 동화의 상세 정보를 가져오는 함수
  * @param id 동화 ID (fid)
  * @returns Promise<FairyTale> 동화 상세 정보

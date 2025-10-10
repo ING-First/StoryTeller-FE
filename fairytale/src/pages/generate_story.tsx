@@ -1,22 +1,31 @@
 // src/pages/generate_story.tsx
-import React, {useState, useEffect, useRef} from 'react'
-import {useParams} from 'react-router-dom'
+import React, {useState, useEffect, useRef, useCallback} from 'react'
+import {useParams, useNavigate} from 'react-router-dom'
 import Header from '../components/Header'
 import {getFairyTaleById, FairyTaleItem} from '../api/search'
 import {readFairyTalePage} from '../api/read'
 import {resumeReading} from '../api/read_resume'
-import {getAllImages} from '../api/image' // 다시 getAllImages 사용
+import {getAllImages} from '../api/image'
+import {generateStoryStream} from '../api/story_generate'
+import {updateReadingProgress} from '../api/progress'
 import PageFlip from '../components/PageFlip'
+import {
+  saveImage,
+  getImage,
+  saveFairyTaleMeta,
+  getFairyTaleMeta,
+  clearOldCache
+} from '../utils/storyCache'
 
-const PAGE_W = 530 // 각 페이지 너비
-const PAGE_H = 680 // 각 페이지 높이
+const PAGE_W = 530
+const PAGE_H = 680
 
-// --- JWT(JWS) payload 파서 (base64url -> JSON) ---
 interface JWTPayload {
   sub?: string | number
   uid?: string | number
-  exp?: number // seconds since epoch
+  exp?: number
 }
+
 function parseJwt(token: string): JWTPayload | null {
   try {
     const base64Url = token.split('.')[1]
@@ -34,33 +43,45 @@ function parseJwt(token: string): JWTPayload | null {
   }
 }
 
+interface StreamingPage {
+  text: string
+  page: number
+}
+
 const GenerateStory = () => {
-  // URL에서는 fid만 받음
   const {fid} = useParams<{fid: string}>()
+  const navigate = useNavigate()
 
-  // uid는 JWT에서 복원
   const [uid, setUid] = useState<number | null>(null)
-
   const [fairyTale, setFairyTale] = useState<FairyTaleItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // react-pageflip의 페이지 인덱스(0-based, 단일 페이지 기준)
-  const [currentPage, setCurrentPage] = useState(0)
+  const [streamingPages, setStreamingPages] = useState<StreamingPage[]>([])
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [streamTitle, setStreamTitle] = useState<string>('')
+  const [isStreamCompleted, setIsStreamCompleted] = useState(false)
+  const [completedFid, setCompletedFid] = useState<string | null>(null)
 
-  // 오디오
+  const [currentPage, setCurrentPage] = useState(0)
+  const [initialPage, setInitialPage] = useState(0)
+  const [isDataReady, setIsDataReady] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [playingPage, setPlayingPage] = useState<number | null>(null)
   const [imageLoadStates, setImageLoadStates] = useState<{[key: number]: boolean}>({})
-  const [pageImages, setPageImages] = useState<{[key: number]: string}>({}) // 이미지 URL 저장
+  const [pageImages, setPageImages] = useState<{[key: number]: string}>({})
   const audioRef = useRef<HTMLAudioElement | null>(null)
-
-  // 책 컨테이너(클릭 감지용)
   const bookContainerRef = useRef<HTMLDivElement | null>(null)
-  // PageFlip ref 추가
   const pageFlipRef = useRef<any>(null)
+  const progressUpdateTimer = useRef<NodeJS.Timeout | null>(null)
+  const currentPageRef = useRef<number>(0)
+  const hasStartedGeneration = useRef(false)
 
-  // 1) localStorage에서 uid 복원
+  // 앱 시작 시 오래된 캐시 정리
+  useEffect(() => {
+    clearOldCache()
+  }, [])
+
   useEffect(() => {
     const token = localStorage.getItem('token')
     const uidStr = localStorage.getItem('uid')
@@ -78,7 +99,6 @@ const GenerateStory = () => {
       return
     }
 
-    // JWT 만료 시간 체크 (옵션)
     const payload = parseJwt(token)
     if (payload?.exp && payload.exp * 1000 < Date.now()) {
       setError('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
@@ -89,75 +109,343 @@ const GenerateStory = () => {
     setUid(uidNum)
   }, [])
 
-  // 이미지 로드 실패
-  const handleImageError = (pageIndex: number) => {
-    setImageLoadStates(prev => ({...prev, [pageIndex]: false}))
-  }
+  const isStreamMode = !fid
 
-  // 2) 동화 & 이어읽기 & 이미지 로딩 (uid 복원되고 fid 있을 때 실행)
+  // 현재 페이지를 ref에 동기화
   useEffect(() => {
-    const loadFairyTale = async () => {
-      const fidNum = fid ? parseInt(fid, 10) : NaN
+    currentPageRef.current = currentPage
+  }, [currentPage])
 
-      if (!uid || !fid || Number.isNaN(fidNum)) {
-        setError('잘못된 인증 정보 또는 URL 파라미터입니다.')
+  // debounce된 진행 상황 저장 (페이지 전환 시 사용)
+  const debouncedUpdateProgress = useCallback(
+    (page: number) => {
+      const currentFid = completedFid || fid
+      if (!uid || !currentFid) return
+
+      if (progressUpdateTimer.current) {
+        clearTimeout(progressUpdateTimer.current)
+      }
+
+      progressUpdateTimer.current = setTimeout(async () => {
+        try {
+          const clipNumber = Math.floor(page / 2) + 1
+          await updateReadingProgress(uid, parseInt(currentFid, 10), clipNumber)
+          console.log(
+            `[Debounce] Clip ${clipNumber} (페이지 ${page}-${page + 1}) 진행 상황 저장됨`
+          )
+        } catch (error) {
+          console.error('진행 상황 저장 실패:', error)
+        }
+      }, 1000)
+    },
+    [uid, fid, completedFid]
+  )
+
+  // 페이지 이탈/탭 전환 시 즉시 저장
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        const currentFid = completedFid || fid
+        if (uid && currentFid && currentPageRef.current !== undefined) {
+          const clipNumber = Math.floor(currentPageRef.current / 2) + 1
+
+          // sendBeacon을 사용하여 페이지 이탈 시에도 확실하게 전송
+          const apiUrl = `/api/users/${uid}/fairy_tales/${parseInt(
+            currentFid,
+            10
+          )}/progress`
+          const data = JSON.stringify({next_page: clipNumber})
+
+          if (navigator.sendBeacon) {
+            const blob = new Blob([data], {type: 'application/json'})
+            const success = navigator.sendBeacon(apiUrl, blob)
+            console.log(
+              `[visibilitychange] sendBeacon 전송 ${
+                success ? '성공' : '실패'
+              }: Clip ${clipNumber}`
+            )
+          } else {
+            // sendBeacon 미지원 브라우저 대비
+            updateReadingProgress(uid, parseInt(currentFid, 10), clipNumber).catch(err =>
+              console.error('진행 상황 저장 실패:', err)
+            )
+          }
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+
+      // debounce 타이머 정리
+      if (progressUpdateTimer.current) {
+        clearTimeout(progressUpdateTimer.current)
+      }
+
+      // 언마운트 시에도 저장 시도
+      const currentFid = completedFid || fid
+      if (uid && currentFid && currentPageRef.current !== undefined) {
+        const clipNumber = Math.floor(currentPageRef.current / 2) + 1
+        updateReadingProgress(uid, parseInt(currentFid, 10), clipNumber)
+          .then(() => {
+            console.log(
+              `[언마운트] Clip ${clipNumber} (페이지 ${currentPageRef.current}) 진행 상황 저장됨`
+            )
+          })
+          .catch(error => {
+            console.error('언마운트 시 진행 상황 저장 실패:', error)
+          })
+      }
+    }
+  }, [uid, fid, completedFid])
+
+  const startStreamGeneration = useCallback(async (storyData: any) => {
+    setIsGenerating(true)
+    setStreamingPages([])
+    setLoading(true)
+    setIsStreamCompleted(false)
+
+    try {
+      let capturedTitle = ''
+      let capturedPages: StreamingPage[] = []
+      let capturedImages: {[key: number]: string} = {}
+
+      await generateStoryStream(storyData, async pageData => {
+        if (pageData.page) {
+          const newPage: StreamingPage = {
+            text: pageData.content,
+            page: pageData.page
+          }
+
+          if (pageData.title && !capturedTitle) {
+            capturedTitle = pageData.title
+            setStreamTitle(pageData.title)
+          }
+
+          capturedPages = [...capturedPages, newPage]
+          setStreamingPages(capturedPages)
+
+          // 첫 페이지가 생성되면 데이터 준비 완료
+          if (capturedPages.length === 1) {
+            setIsDataReady(true)
+          }
+
+          if (pageData.image) {
+            capturedImages = {
+              ...capturedImages,
+              [pageData.page - 1]: pageData.image
+            }
+            setPageImages(capturedImages)
+            setImageLoadStates(prev => ({
+              ...prev,
+              [pageData.page - 1]: true
+            }))
+          }
+
+          setCurrentPage(pageData.page - 1)
+          setLoading(false)
+        } else if (pageData.completed) {
+          setIsGenerating(false)
+          setIsStreamCompleted(true)
+          setCompletedFid(pageData.fid)
+          setLoading(false)
+
+          console.log('동화 생성 완료:', pageData.fid)
+
+          // 생성 완료 후 캐시 저장
+          if (pageData.fid && capturedTitle && capturedPages.length > 0) {
+            await saveFairyTaleMeta(pageData.fid, capturedTitle, capturedPages)
+
+            // 이미지도 캐시에 저장
+            const imageEntries = Object.entries(capturedImages)
+            for (const [idx, imageData] of imageEntries) {
+              await saveImage(pageData.fid, parseInt(idx), imageData as string)
+            }
+            console.log('캐시 저장 완료')
+
+            // 독서 상황 업데이트 (첫 페이지로 설정하여 나중에 읽을 수 있도록)
+            try {
+              await updateReadingProgress(storyData.uid, parseInt(pageData.fid, 10), 1)
+              console.log('독서 상황 업데이트 완료: Clip 1로 설정')
+            } catch (error) {
+              console.error('독서 상황 업데이트 실패:', error)
+            }
+          }
+
+          window.history.replaceState(
+            {
+              fromStreaming: true,
+              streamedPages: capturedPages,
+              streamedTitle: capturedTitle,
+              streamedImages: capturedImages
+            },
+            '',
+            `/generate_story/${pageData.fid}`
+          )
+        } else if (pageData.error) {
+          setIsGenerating(false)
+          setLoading(false)
+          setError(pageData.error)
+        }
+      })
+    } catch (error) {
+      setIsGenerating(false)
+      setLoading(false)
+      setError('동화 생성에 실패했습니다.')
+      console.error('스트리밍 에러:', error)
+    }
+  }, [])
+
+  const loadExistingFairyTale = useCallback(
+    async (currentFid: string) => {
+      const fidNum = currentFid ? parseInt(currentFid, 10) : NaN
+
+      if (!uid || !currentFid || Number.isNaN(fidNum)) {
+        setError('잘못된 요청입니다.')
         setLoading(false)
         return
       }
 
       try {
         setLoading(true)
-        const data = await getFairyTaleById(uid, fidNum)
-        setFairyTale(data)
 
-        // 동화책 제목을 기반으로 이미지 폴더에서 모든 이미지 가져오기
-        const imageFolderPath = `/content/gdrive/MyDrive/Colab Notebooks/fairyTale_images/${data.title}`
+        const navigationState = navigate.length ? null : window.history.state?.usr
 
-        try {
-          const imagesData = await getAllImages(imageFolderPath)
-          if (imagesData && imagesData.images.length > 0) {
-            const imageMap: {[key: number]: string} = {}
-
-            // 백엔드에서 받은 이미지들을 페이지 순서대로 매핑
-            imagesData.images.forEach((img, index) => {
-              imageMap[index] = `data:image/png;base64,${img.image}`
-              setImageLoadStates(prev => ({...prev, [index]: true}))
-            })
-
-            setPageImages(imageMap)
-          }
-        } catch (error) {
-          console.error('이미지 로딩 실패:', error)
-          // 이미지 로딩 실패해도 동화책은 정상 표시
+        if (navigationState?.fromStreaming) {
+          setStreamingPages(navigationState.streamedPages || [])
+          setStreamTitle(navigationState.streamedTitle || '')
+          setPageImages(navigationState.streamedImages || {})
+          setIsStreamCompleted(true)
+          setCompletedFid(currentFid)
+          setIsDataReady(true)
+          setLoading(false)
+          return
         }
 
+        // 1. 먼저 캐시에서 메타데이터 확인
+        const cachedMeta = await getFairyTaleMeta(currentFid)
+
+        // 2. 서버에서 동화책 데이터 가져오기
+        const data = await getFairyTaleById(uid, fidNum)
+        setFairyTale(data)
+        setIsDataReady(true)
+
+        // 3. 캐시된 이미지 먼저 로드
+        let hasAllCachedImages = true
+        const imageMap: {[key: number]: string} = {}
+
+        for (let i = 0; i < data.pages.length; i++) {
+          const cachedImage = await getImage(currentFid, i)
+          if (cachedImage) {
+            imageMap[i] = cachedImage
+            setImageLoadStates(prev => ({...prev, [i]: true}))
+          } else {
+            hasAllCachedImages = false
+          }
+        }
+
+        if (Object.keys(imageMap).length > 0) {
+          setPageImages(imageMap)
+          console.log(`캐시에서 ${Object.keys(imageMap).length}개 이미지 로드됨`)
+        }
+
+        // 4. 캐시되지 않은 이미지가 있으면 서버에서 가져오기
+        if (!hasAllCachedImages) {
+          const imageFolderPath = `/content/gdrive/MyDrive/Colab Notebooks/fairyTale_images/${data.title}`
+
+          try {
+            const imagesData = await getAllImages(imageFolderPath)
+            if (imagesData && imagesData.images.length > 0) {
+              for (let index = 0; index < imagesData.images.length; index++) {
+                const img = imagesData.images[index]
+                const imageData = `data:image/png;base64,${img.image}`
+
+                if (!imageMap[index]) {
+                  imageMap[index] = imageData
+                  setImageLoadStates(prev => ({...prev, [index]: true}))
+                  await saveImage(currentFid, index, imageData)
+                }
+              }
+              setPageImages(imageMap)
+              console.log('서버에서 추가 이미지 로드 및 캐시 저장 완료')
+            }
+          } catch (error) {
+            console.error('이미지 로딩 실패:', error)
+          }
+        }
+
+        // 5. 메타데이터가 캐시에 없으면 저장
+        if (!cachedMeta && data.title && data.pages) {
+          await saveFairyTaleMeta(currentFid, data.title, data.pages)
+        }
+
+        // 6. 이어읽기 처리
         try {
           const resumeData = await resumeReading(uid, fidNum)
-          const startIdx = Math.max((resumeData?.next_page ?? 1) - 1, 0)
-          setCurrentPage(startIdx)
+          const clipNumber = resumeData?.next_page ?? 1
+          const startIdx = (clipNumber - 1) * 2
 
-          // PageFlip 초기 페이지 설정
-          setTimeout(() => {
-            if (pageFlipRef.current && startIdx > 0) {
-              pageFlipRef.current.flip(startIdx)
-            }
-          }, 100)
-        } catch {
-          /* 이어읽기 실패 무시 */
+          console.log(`이어읽기: clipNumber=${clipNumber}, startIdx=${startIdx}`)
+
+          setLoading(false)
+          setCurrentPage(startIdx)
+          setInitialPage(startIdx)
+        } catch (err) {
+          console.error('이어읽기 실패:', err)
+          setLoading(false)
         }
       } catch (err: any) {
         setError(err.message || '동화책을 불러오는데 실패했습니다.')
-      } finally {
+        setLoading(false)
+      }
+    },
+    [uid, navigate]
+  )
+
+  useEffect(() => {
+    if (isStreamMode && uid && !hasStartedGeneration.current) {
+      const urlParams = new URLSearchParams(window.location.search)
+      const name = urlParams.get('name') || ''
+      const age = parseInt(urlParams.get('age') || '7')
+      const genre = urlParams.get('genre') || ''
+
+      if (name && age && genre) {
+        hasStartedGeneration.current = true
+        startStreamGeneration({name, age, genre, uid, type: 2})
+      } else {
+        setError('동화 생성에 필요한 정보가 없습니다. 다시 시도해주세요.')
         setLoading(false)
       }
     }
-    // uid가 복원되고 fid가 유효할 때만 호출
-    if (uid) loadFairyTale()
-  }, [uid, fid])
+  }, [isStreamMode, uid, startStreamGeneration])
 
-  // 오디오 재생(왼쪽 페이지 기준)
+  useEffect(() => {
+    if (!isStreamMode && uid && fid) {
+      loadExistingFairyTale(fid)
+    }
+  }, [isStreamMode, uid, fid, loadExistingFairyTale])
+
+  const handleImageError = (pageIndex: number) => {
+    setImageLoadStates(prev => ({...prev, [pageIndex]: false}))
+  }
+
   const playPageAudio = async (pageIndex: number) => {
-    if (!fairyTale || !fairyTale.pages[pageIndex]?.text || !uid || !fid) return
+    const pages = displayPages
+    if (!pages[pageIndex]?.text || !uid) return
+
+    if (isStreamMode && !isStreamCompleted) {
+      alert('동화 생성이 완료된 후 음성을 들을 수 있습니다.')
+      return
+    }
+
+    const currentFid = completedFid || fid
+    if (!currentFid) {
+      alert('음성 재생을 위한 정보가 부족합니다.')
+      return
+    }
+
     try {
       setIsPlaying(true)
       setPlayingPage(pageIndex)
@@ -169,9 +457,9 @@ const GenerateStory = () => {
 
       const response = await readFairyTalePage(
         uid,
-        parseInt(fid, 10),
+        parseInt(currentFid, 10),
         pageIndex + 1,
-        'eleven_labs_default' // ElevenLabs 기본 voice_id 사용
+        'eleven_labs_default'
       )
 
       if (!(response instanceof Blob)) {
@@ -213,40 +501,79 @@ const GenerateStory = () => {
     setPlayingPage(null)
   }
 
-  // PageFlip 페이지 변경 이벤트 핸들러
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (isStreamMode && isGenerating && !isStreamCompleted) {
+        e.preventDefault()
+        const shouldLeave = window.confirm('동화 생성을 중단하고 나가시겠습니까?')
+        if (!shouldLeave) {
+          window.history.pushState(
+            null,
+            '',
+            window.location.pathname + window.location.search
+          )
+          return
+        }
+        setIsGenerating(false)
+      }
+    }
+
+    if (isStreamMode && isGenerating && !isStreamCompleted) {
+      window.addEventListener('popstate', handlePopState)
+      window.history.pushState(
+        null,
+        '',
+        window.location.pathname + window.location.search
+      )
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [isStreamMode, isGenerating, isStreamCompleted])
+
   const handlePageFlip = (e: any) => {
     const newPage = e.data
     setCurrentPage(newPage)
     stopAudio()
+    debouncedUpdateProgress(newPage)
   }
 
-  // 책 클릭 시 좌/우 반쪽을 감지해서 state 동기화
   const handleBookClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!fairyTale) return
+    const pages = displayPages
+    if (!pages.length) return
+
     const el = bookContainerRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
     const x = e.clientX - rect.left
     const half = rect.width / 2
-    const lastIndex = fairyTale.pages.length - 1
+    const lastIndex = pages.length - 1
 
-    // react-pageflip도 같은 클릭을 받아 넘김 → 우리는 state만 업데이트
+    let newPage = currentPage
+
     if (x > half && currentPage < lastIndex) {
-      setCurrentPage(p => Math.min(p + 1, lastIndex))
+      newPage = Math.min(currentPage + 1, lastIndex)
+      setCurrentPage(newPage)
       stopAudio()
     } else if (x <= half && currentPage > 0) {
-      setCurrentPage(p => Math.max(p - 1, 0))
+      newPage = Math.max(currentPage - 1, 0)
+      setCurrentPage(newPage)
       stopAudio()
+    }
+
+    if (newPage !== currentPage) {
+      debouncedUpdateProgress(newPage)
     }
   }
 
-  // 하단 ←/→ 버튼에서 페이지 넘김 - PageFlip ref 사용
   const goToPrevPage = () => {
     if (!canPrev || !pageFlipRef.current) return
 
     const newPage = Math.max(currentPage - 1, 0)
     setCurrentPage(newPage)
     stopAudio()
+    debouncedUpdateProgress(newPage)
 
     try {
       if (pageFlipRef.current.pageFlip) {
@@ -255,8 +582,6 @@ const GenerateStory = () => {
         pageFlipRef.current.flipPrev()
       } else if (pageFlipRef.current.turnToPrevPage) {
         pageFlipRef.current.turnToPrevPage()
-      } else {
-        console.log('Available methods:', Object.getOwnPropertyNames(pageFlipRef.current))
       }
     } catch (error) {
       console.error('Error flipping to previous page:', error)
@@ -264,11 +589,13 @@ const GenerateStory = () => {
   }
 
   const goToNextPage = () => {
-    if (!canNext || !fairyTale || !pageFlipRef.current) return
+    if (!canNext || !pageFlipRef.current) return
 
-    const newPage = Math.min(currentPage + 1, fairyTale.pages.length - 1)
+    const pages = displayPages
+    const newPage = Math.min(currentPage + 1, pages.length - 1)
     setCurrentPage(newPage)
     stopAudio()
+    debouncedUpdateProgress(newPage)
 
     try {
       if (pageFlipRef.current.pageFlip) {
@@ -277,28 +604,41 @@ const GenerateStory = () => {
         pageFlipRef.current.flipNext()
       } else if (pageFlipRef.current.turnToNextPage) {
         pageFlipRef.current.turnToNextPage()
-      } else {
-        console.log('Available methods:', Object.getOwnPropertyNames(pageFlipRef.current))
       }
     } catch (error) {
       console.error('Error flipping to next page:', error)
     }
   }
 
-  // 쌍 페이지/오디오용 인덱스
-  const leftIndex = currentPage % 2 === 0 ? currentPage : currentPage - 1
-  const totalPairs = fairyTale ? Math.ceil(fairyTale.pages.length / 2) : 0
-  const currentPair = Math.floor(currentPage / 2) + 1
+  const displayPages = isStreamMode ? streamingPages : fairyTale?.pages || []
+  const displayTitle = isStreamMode ? streamTitle : fairyTale?.title
 
+  const totalPairs = Math.ceil(displayPages.length / 2)
+  const currentPair = Math.floor(currentPage / 2) + 1
   const canPrev = currentPage > 0
-  const canNext = fairyTale ? currentPage < fairyTale.pages.length - 1 : false
+  const canNext = currentPage < displayPages.length - 1
 
   if (loading) {
+    const message =
+      isStreamMode && isGenerating
+        ? `페이지 ${streamingPages.length + 1} 생성 중... (이미지 포함)`
+        : '동화책을 불러오는 중...'
+
     return (
       <div className="min-h-screen bg-pink-50 font-pinkfong">
         <Header />
         <div className="flex items-center justify-center h-screen">
-          <div className="text-2xl font-semibold">동화책을 불러오는 중...</div>
+          <div className="text-center">
+            <div className="text-2xl font-semibold mb-4">{message}</div>
+            {isStreamMode && streamTitle && (
+              <div className="text-lg text-gray-600">"{streamTitle}"</div>
+            )}
+            {isStreamMode && isGenerating && (
+              <div className="mt-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-4 border-pink-500 border-t-transparent mx-auto"></div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -309,18 +649,32 @@ const GenerateStory = () => {
       <div className="min-h-screen bg-pink-50 font-pinkfong">
         <Header />
         <div className="flex items-center justify-center h-screen">
-          <div className="text-2xl font-semibold text-red-600">{error}</div>
+          <div className="text-center">
+            <div className="text-2xl font-semibold text-red-600 mb-4">{error}</div>
+            <button
+              onClick={() => navigate(-1)}
+              className="px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors">
+              돌아가기
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
-  if (!fairyTale) {
+  if (!displayPages.length && !isGenerating) {
     return (
       <div className="min-h-screen bg-pink-50 font-pinkfong">
         <Header />
         <div className="flex items-center justify-center h-screen">
-          <div className="text-2xl font-semibold">동화책을 찾을 수 없습니다.</div>
+          <div className="text-center">
+            <div className="text-2xl font-semibold mb-4">동화책을 찾을 수 없습니다.</div>
+            <button
+              onClick={() => navigate(-1)}
+              className="px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors">
+              돌아가기
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -330,129 +684,160 @@ const GenerateStory = () => {
     <div className="min-h-screen bg-pink-50 font-pinkfong">
       <Header />
 
+      {isStreamMode && isGenerating && (
+        <div className="fixed top-20 left-4 bg-blue-500 text-white px-4 py-2 rounded-lg z-50 shadow-lg">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+            <span>페이지 {streamingPages.length + 1} 생성 중... (텍스트 + 이미지)</span>
+          </div>
+        </div>
+      )}
+
+      {isStreamMode && isStreamCompleted && (
+        <div className="fixed top-20 left-4 bg-green-500 text-white px-4 py-2 rounded-lg z-50 shadow-lg">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span>동화 생성 완료!</span>
+          </div>
+        </div>
+      )}
+
       <div className="min-h-screen bg-pink-50 flex flex-col">
-        {/* 메인 컨텐츠: 책 + 오른쪽 하단 외부 컨트롤 */}
         <div className="flex-1 flex items-center justify-center py-8">
           <div className="flex items-start">
-            {/* 책(클릭 캡처용 래퍼) */}
             <div
               ref={bookContainerRef}
               className="relative"
               onClick={handleBookClick}
               style={{width: PAGE_W * 2, height: PAGE_H}}
               title="왼쪽 클릭: 이전 / 오른쪽 클릭: 다음">
-              <PageFlip
-                ref={pageFlipRef}
-                width={PAGE_W}
-                height={PAGE_H}
-                onFlip={handlePageFlip}>
-                {fairyTale.pages.map((p, idx) => {
-                  const showImage = !!(pageImages[idx] && imageLoadStates[idx] !== false)
-                  return (
-                    <div
-                      key={idx}
-                      className="relative bg-gradient-to-br from-amber-50 via-white to-orange-50 border-4 border-amber-200 p-8 w-[530px] h-[680px] flex flex-col shadow-2xl"
-                      style={{
-                        backgroundImage: `
+              {isDataReady && (
+                <PageFlip
+                  ref={pageFlipRef}
+                  width={PAGE_W}
+                  height={PAGE_H}
+                  startPage={initialPage}
+                  onFlip={handlePageFlip}>
+                  {displayPages.map((p: any, idx: number) => {
+                    const showImage = !!(
+                      pageImages[idx] && imageLoadStates[idx] !== false
+                    )
+                    return (
+                      <div
+                        key={idx}
+                        className="relative bg-gradient-to-br from-amber-50 via-white to-orange-50 border-4 border-amber-200 p-8 w-[530px] h-[680px] flex flex-col shadow-2xl"
+                        style={{
+                          backgroundImage: `
                           radial-gradient(circle at 20% 80%, rgba(255, 237, 213, 0.3) 0%, transparent 50%),
                           radial-gradient(circle at 80% 20%, rgba(255, 228, 196, 0.2) 0%, transparent 50%),
                           linear-gradient(135deg, rgba(251, 191, 36, 0.05) 0%, rgba(255, 255, 255, 0.8) 50%, rgba(251, 191, 36, 0.05) 100%)
                         `
-                      }}
-                      data-density={
-                        idx === 0 || idx === fairyTale.pages.length - 1
-                          ? 'hard'
-                          : undefined
-                      }>
-                      {/* 장식적인 모서리 요소들 */}
-                      <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-amber-300 rounded-tl-lg"></div>
-                      <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-amber-300 rounded-tr-lg"></div>
-                      <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-300 rounded-bl-lg"></div>
-                      <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-300 rounded-br-lg"></div>
+                        }}
+                        data-density={
+                          idx === 0 || idx === displayPages.length - 1
+                            ? 'hard'
+                            : undefined
+                        }>
+                        <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-amber-300 rounded-tl-lg"></div>
+                        <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-amber-300 rounded-tr-lg"></div>
+                        <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-300 rounded-bl-lg"></div>
+                        <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-300 rounded-br-lg"></div>
 
-                      {/* 페이지 번호 */}
-                      <div className="absolute top-6 right-6 text-xs text-amber-600 font-medium bg-amber-100 px-2 py-1 rounded-full">
-                        {idx + 1}
-                      </div>
+                        <div className="absolute top-6 right-6 text-xs text-amber-600 font-medium bg-amber-100 px-2 py-1 rounded-full">
+                          {idx + 1}
+                        </div>
 
-                      {/* 이미지 영역 */}
-                      <div className="flex-shrink-0 mb-6 h-[480px] w-full flex justify-center">
-                        <div className="relative w-[320px] h-[480px]">
-                          {showImage ? (
-                            <div className="relative w-full h-full group">
-                              <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 to-orange-400/20 rounded-xl transform rotate-1 group-hover:rotate-2 transition-transform duration-300"></div>
-                              <img
-                                src={pageImages[idx]}
-                                alt={`페이지 ${idx + 1}`}
-                                className="relative w-full h-full object-cover rounded-xl border-3 border-white shadow-xl transform group-hover:scale-105 transition-all duration-300"
-                                onError={() => handleImageError(idx)}
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/5 via-transparent to-white/10 rounded-xl pointer-events-none"></div>
+                        <div className="flex-shrink-0 mb-6 h-[480px] w-full flex justify-center">
+                          <div className="relative w-[320px] h-[480px]">
+                            {showImage ? (
+                              <div className="relative w-full h-full group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 to-orange-400/20 rounded-xl transform rotate-1 group-hover:rotate-2 transition-transform duration-300"></div>
+                                <img
+                                  src={pageImages[idx]}
+                                  alt={`페이지 ${idx + 1}`}
+                                  className="relative w-full h-full object-cover rounded-xl border-3 border-white shadow-xl transform group-hover:scale-105 transition-all duration-300"
+                                  onError={() => handleImageError(idx)}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/5 via-transparent to-white/10 rounded-xl pointer-events-none"></div>
+                              </div>
+                            ) : (
+                              <div className="w-full h-full rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-dashed border-amber-300 flex items-center justify-center">
+                                <div className="text-amber-400">
+                                  <svg
+                                    className="w-16 h-16 mx-auto mb-2"
+                                    fill="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                                  </svg>
+                                  <p className="text-sm text-amber-500">
+                                    {isGenerating
+                                      ? '이미지 생성 중...'
+                                      : '이미지 로딩중...'}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex-1 flex items-start justify-center px-4">
+                          {p.text ? (
+                            <div className="relative max-w-[400px]">
+                              <div className="absolute -inset-4 bg-gradient-to-r from-amber-50/50 via-white/30 to-orange-50/50 rounded-2xl"></div>
+                              <p className="relative text-base leading-7 text-gray-800 text-center font-pinkfong tracking-wide">
+                                {p.text}
+                              </p>
+                              <div className="mt-4 flex justify-center">
+                                <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent"></div>
+                              </div>
                             </div>
                           ) : (
-                            <div className="w-full h-full rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-dashed border-amber-300 flex items-center justify-center">
-                              <div className="text-amber-400">
-                                <svg
-                                  className="w-16 h-16 mx-auto mb-2"
-                                  fill="currentColor"
-                                  viewBox="0 0 24 24">
-                                  <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
-                                </svg>
-                                <p className="text-sm text-amber-500">이미지 로딩중...</p>
+                            <div className="flex flex-col items-center justify-center text-amber-400">
+                              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-3">
+                                <span className="text-lg font-bold text-amber-600">
+                                  {idx + 1}
+                                </span>
                               </div>
+                              <p className="text-lg font-semibold font-pinkfong">
+                                {isGenerating
+                                  ? '내용 생성 중...'
+                                  : showImage
+                                  ? ''
+                                  : '내용을 준비중입니다'}
+                              </p>
                             </div>
                           )}
                         </div>
-                      </div>
 
-                      {/* 텍스트 영역 */}
-                      <div className="flex-1 flex items-start justify-center px-4">
-                        {p.text ? (
-                          <div className="relative max-w-[400px]">
-                            <div className="absolute -inset-4 bg-gradient-to-r from-amber-50/50 via-white/30 to-orange-50/50 rounded-2xl"></div>
-                            <p className="relative text-base leading-7 text-gray-800 text-center font-pinkfong tracking-wide">
-                              {p.text}
-                            </p>
-                            <div className="mt-4 flex justify-center">
-                              <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent"></div>
-                            </div>
+                        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2">
+                          <div className="flex space-x-1">
+                            <div className="w-1.5 h-1.5 bg-amber-300 rounded-full"></div>
+                            <div className="w-1 h-1 bg-amber-200 rounded-full"></div>
+                            <div className="w-1.5 h-1.5 bg-amber-300 rounded-full"></div>
                           </div>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center text-amber-400">
-                            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-3">
-                              <span className="text-lg font-bold text-amber-600">
-                                {idx + 1}
-                              </span>
-                            </div>
-                            <p className="text-lg font-semibold font-pinkfong">
-                              {showImage ? '' : '내용을 준비중입니다'}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 페이지 하단 장식 */}
-                      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2">
-                        <div className="flex space-x-1">
-                          <div className="w-1.5 h-1.5 bg-amber-300 rounded-full"></div>
-                          <div className="w-1 h-1 bg-amber-200 rounded-full"></div>
-                          <div className="w-1.5 h-1.5 bg-amber-300 rounded-full"></div>
                         </div>
                       </div>
-                    </div>
-                  )
-                })}
-              </PageFlip>
+                    )
+                  })}
+                </PageFlip>
+              )}
 
-              {/* 책 바깥 오른쪽 하단 컨트롤 */}
               <div className="absolute -right-16 bottom-4 flex flex-col items-center gap-4">
-                {/* 재생/토글: 왼쪽 페이지 기준 */}
                 <button
                   onClick={() => {
                     if (isPlaying && playingPage === currentPage) stopAudio()
                     else playPageAudio(currentPage)
                   }}
-                  disabled={!fairyTale.pages[currentPage]?.text}
+                  disabled={
+                    !displayPages[currentPage]?.text ||
+                    (isStreamMode && !isStreamCompleted)
+                  }
                   aria-label="재생"
                   className="w-12 h-12 rounded-full bg-white border border-gray-300 shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
                   {isPlaying && playingPage === currentPage ? (
@@ -466,11 +851,10 @@ const GenerateStory = () => {
                   )}
                 </button>
 
-                {/* 강제 정지 */}
                 <button
                   onClick={stopAudio}
                   disabled={!isPlaying}
-                  aria-label="일시정지"
+                  aria-label="정지"
                   className="w-12 h-12 rounded-full bg-white border border-gray-300 shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
@@ -481,10 +865,8 @@ const GenerateStory = () => {
           </div>
         </div>
 
-        {/* 하단 네비게이션 바 */}
         <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-gray-200 p-4">
           <div className="flex items-center justify-between max-w-4xl mx-auto">
-            {/* 이전 */}
             <button
               onClick={goToPrevPage}
               disabled={!canPrev}
@@ -503,14 +885,17 @@ const GenerateStory = () => {
               </svg>
             </button>
 
-            {/* 페이지 쌍 정보 */}
             <div className="flex items-center gap-4">
               <span className="text-gray-600 font-medium">
                 {currentPair} / {totalPairs}
               </span>
+              {displayTitle && (
+                <span className="text-gray-800 font-semibold max-w-xs truncate">
+                  {displayTitle}
+                </span>
+              )}
             </div>
 
-            {/* 다음 */}
             <button
               onClick={goToNextPage}
               disabled={!canNext}
@@ -530,18 +915,6 @@ const GenerateStory = () => {
             </button>
           </div>
         </div>
-
-        {/* 닫기 버튼 (기존) */}
-        <button className="fixed top-4 right-4 p-2 rounded-full bg-black/20 hover:bg-black/30 text-white transition-colors z-10">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
       </div>
     </div>
   )

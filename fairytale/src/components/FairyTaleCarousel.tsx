@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react'
+// src/components/FairyTaleCarousel.tsx
+import React, {useState, useEffect} from 'react'
 import FairyTaleCard from './FairyTaleCard'
-import { Link } from 'react-router-dom'
-import { fetchDefaultFairyTales, FairyTale } from '../api/books'
+import {Link} from 'react-router-dom'
+import {fetchDefaultFairyTales, FairyTale, fetchMyFairyTales} from '../api/books'
+import {getFairyTaleList, saveFairyTaleList} from '../utils/storyCache'
 
 const FairyTaleCarousel = () => {
   const [initialFairyTales, setInitialFairyTales] = useState<FairyTale[]>([])
@@ -10,12 +12,42 @@ const FairyTaleCarousel = () => {
   const [isTransitioning, setIsTransitioning] = useState(true)
   const [loading, setLoading] = useState(true)
 
-  // API에서 동화 가져오기
+  // 로그인 상태 확인
+  const isLoggedIn = !!(localStorage.getItem('token') && localStorage.getItem('uid'))
+  const cacheType = isLoggedIn ? 'user' : 'default'
+
   useEffect(() => {
     const getFairyTales = async () => {
       try {
-        const dbTales = await fetchDefaultFairyTales()
-        setInitialFairyTales(dbTales)
+        console.log(`🔍 동화 로드 시작 (${cacheType})`)
+
+        // 1. 캐시 먼저 확인
+        const cachedList = await getFairyTaleList(cacheType)
+
+        if (cachedList && cachedList.length > 0) {
+          console.log(`✅ 캐시에서 로드: ${cachedList.length}개 (${cacheType})`)
+          setInitialFairyTales(cachedList)
+          setLoading(false)
+        }
+
+        // 2. 서버에서 최신 데이터 가져오기 (백그라운드)
+        const dbTales = isLoggedIn
+          ? await fetchMyFairyTales()
+          : await fetchDefaultFairyTales()
+
+        console.log(`🌐 서버에서 로드: ${dbTales.length}개 (${cacheType})`)
+
+        // 3. 캐시와 비교해서 다르면 업데이트
+        const isSame =
+          cachedList &&
+          cachedList.length === dbTales.length &&
+          JSON.stringify(cachedList) === JSON.stringify(dbTales)
+
+        if (!isSame) {
+          console.log(`🔄 데이터 업데이트 (${cacheType})`)
+          setInitialFairyTales(dbTales)
+          await saveFairyTaleList(cacheType, dbTales)
+        }
       } catch (error) {
         console.error('Failed to load fairy tales from API', error)
         setInitialFairyTales([])
@@ -23,27 +55,24 @@ const FairyTaleCarousel = () => {
         setLoading(false)
       }
     }
-    getFairyTales()
-  }, [])
 
-  // 데이터 준비
+    getFairyTales()
+  }, [isLoggedIn, cacheType])
+
   useEffect(() => {
     if (initialFairyTales.length > 0) {
       if (initialFairyTales.length >= 4) {
-        // 무한 캐러셀 구현용 앞뒤 클론
         const clonedBefore = initialFairyTales.slice(-4)
         const clonedAfter = initialFairyTales.slice(0, 4)
         setItems([...clonedBefore, ...initialFairyTales, ...clonedAfter])
-        setOffset(4) // 시작 위치
+        setOffset(4)
       } else {
-        // 데이터가 4개 미만이면 복제 없이 그대로 사용
         setItems(initialFairyTales)
         setOffset(0)
       }
     }
   }, [initialFairyTales])
 
-  // 자동 슬라이드
   useEffect(() => {
     if (items.length > 0 && initialFairyTales.length >= 4) {
       const interval = setInterval(() => {
@@ -53,7 +82,6 @@ const FairyTaleCarousel = () => {
     }
   }, [items, initialFairyTales])
 
-  // 끝까지 가면 리셋 (무한 루프 효과)
   useEffect(() => {
     if (initialFairyTales.length >= 4 && items.length > 0) {
       if (offset >= items.length - 4) {
@@ -68,16 +96,15 @@ const FairyTaleCarousel = () => {
   }, [offset, items, initialFairyTales])
 
   if (loading) {
-    return <div>로딩 중...</div>
+    return <div className="py-10 text-center font-pinkfong">로딩 중...</div>
   }
 
   if (initialFairyTales.length === 0) {
-    return null // 데이터가 없으면 캐러셀 안 보여줌
+    return null
   }
 
   return (
-    <section className="p-6 mt-10 overflow-hidden bg-white border border-gray-200 shadow-xl rounded-2xl">
-      <h3 className="mb-6 text-xl font-bold text-gray-800">동화 리스트</h3>
+    <section className="p-6 mt-10 overflow-hidden bg-white border border-gray-200 shadow-xl rounded-2xl font-pinkfong">
       <div
         className={`flex ${
           isTransitioning && initialFairyTales.length >= 4
@@ -88,9 +115,8 @@ const FairyTaleCarousel = () => {
           transform:
             initialFairyTales.length >= 4
               ? `translateX(-${offset * 25}%)`
-              : 'translateX(0)',
-        }}
-      >
+              : 'translateX(0)'
+        }}>
         {items.map((tale, index) => (
           <div key={index} className="flex-shrink-0 w-1/4 px-2">
             <Link to={`/detail/${tale.fid}`}>
