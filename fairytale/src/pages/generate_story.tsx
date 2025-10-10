@@ -255,12 +255,26 @@ const GenerateStory = () => {
           }
         } else if (pageData.completed) {
           setIsGenerating(false)
-          setIsStreamCompleted(true)
           setCompletedFid(pageData.fid)
 
-          // 빈 페이지 제거 (텍스트가 있는 페이지만 남김)
-          const finalPages = capturedPages.filter(p => p.text)
+          // ✅ 최종 페이지 정리
+          let finalPages = capturedPages.filter(p => p.text)
+
+          // ✅ 모든 페이지가 홀수라면 마지막에 더미 페이지 추가
+          if (finalPages.length % 2 !== 0) {
+            finalPages.push({
+              text: '',
+              page: finalPages.length + 1
+            })
+          }
+
+          // ✅ 먼저 페이지 상태 업데이트 (렌더링 트리거)
           setStreamingPages(finalPages)
+
+          // ✅ 렌더링 반영 후 완료 상태 변경
+          setTimeout(() => {
+            setIsStreamCompleted(true)
+          }, 50)
 
           console.log('동화 생성 완료:', pageData.fid)
 
@@ -334,6 +348,11 @@ const GenerateStory = () => {
         const data = await getFairyTaleById(uid, fidNum)
         setFairyTale(data)
         setIsDataReady(true)
+
+        // ✅ 페이지가 홀수면 더미 페이지 추가
+        if (data.pages.length % 2 !== 0) {
+          ;(data.pages as any).push({text: ''}) // 👈 page 제거 + 타입 무시
+        }
 
         let hasAllCachedImages = true
         const imageMap: {[key: number]: string} = {}
@@ -784,6 +803,11 @@ const GenerateStory = () => {
                       pageImages[idx] && imageLoadStates[idx] !== false
                     )
                     const hasContent = !!p.text
+                    const isDummyDuringStream =
+                      isStreamMode &&
+                      !isStreamCompleted &&
+                      idx === displayPages.length - 1 &&
+                      displayPages.length % 2 !== 0
 
                     return (
                       <div
@@ -876,7 +900,11 @@ const GenerateStory = () => {
                                 <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent"></div>
                               </div>
                             </div>
+                          ) : isDummyDuringStream || p.text === '' ? (
+                            // ✅ 더미 페이지 or 빈 텍스트 페이지는 완전히 빈 면
+                            <div className="w-full h-full bg-transparent" />
                           ) : (
+                            // ✅ 일반 생성 중 페이지는 그대로 스피너 표시
                             <div className="flex flex-col items-center justify-center text-amber-400">
                               <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-3">
                                 <div className="animate-spin rounded-full h-6 w-6 border-2 border-amber-600 border-t-transparent"></div>
@@ -887,7 +915,6 @@ const GenerateStory = () => {
                             </div>
                           )}
                         </div>
-
                         <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2">
                           <div className="flex space-x-1">
                             <div className="w-1.5 h-1.5 bg-amber-300 rounded-full"></div>
