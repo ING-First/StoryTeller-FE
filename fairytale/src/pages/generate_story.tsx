@@ -149,7 +149,6 @@ const GenerateStory = () => {
         if (uid && currentFid && currentPageRef.current !== undefined) {
           const clipNumber = Math.floor(currentPageRef.current / 2) + 1
 
-          // sendBeacon을 사용하여 페이지 이탈 시에도 확실하게 전송
           const apiUrl = `/api/users/${uid}/fairy_tales/${parseInt(
             currentFid,
             10
@@ -165,7 +164,6 @@ const GenerateStory = () => {
               }: Clip ${clipNumber}`
             )
           } else {
-            // sendBeacon 미지원 브라우저 대비
             updateReadingProgress(uid, parseInt(currentFid, 10), clipNumber).catch(err =>
               console.error('진행 상황 저장 실패:', err)
             )
@@ -179,12 +177,10 @@ const GenerateStory = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
 
-      // debounce 타이머 정리
       if (progressUpdateTimer.current) {
         clearTimeout(progressUpdateTimer.current)
       }
 
-      // 언마운트 시에도 저장 시도
       const currentFid = completedFid || fid
       if (uid && currentFid && currentPageRef.current !== undefined) {
         const clipNumber = Math.floor(currentPageRef.current / 2) + 1
@@ -203,13 +199,21 @@ const GenerateStory = () => {
 
   const startStreamGeneration = useCallback(async (storyData: any) => {
     setIsGenerating(true)
-    setStreamingPages([])
-    setLoading(true)
+    // 두 개의 빈 페이지로 시작 (짝수 페이지 구조 유지)
+    setStreamingPages([
+      {text: '', page: 1},
+      {text: '', page: 2}
+    ])
+    setLoading(false)
+    setIsDataReady(true)
     setIsStreamCompleted(false)
 
     try {
       let capturedTitle = ''
-      let capturedPages: StreamingPage[] = []
+      let capturedPages: StreamingPage[] = [
+        {text: '', page: 1},
+        {text: '', page: 2}
+      ]
       let capturedImages: {[key: number]: string} = {}
 
       await generateStoryStream(storyData, async pageData => {
@@ -224,13 +228,19 @@ const GenerateStory = () => {
             setStreamTitle(pageData.title)
           }
 
-          capturedPages = [...capturedPages, newPage]
-          setStreamingPages(capturedPages)
+          const pageIndex = pageData.page - 1
+          capturedPages[pageIndex] = newPage
 
-          // 첫 페이지가 생성되면 데이터 준비 완료
-          if (capturedPages.length === 1) {
-            setIsDataReady(true)
+          const desiredLength =
+            pageData.page % 2 === 0 ? pageData.page : pageData.page + 1
+          while (capturedPages.length < desiredLength) {
+            capturedPages.push({
+              text: '',
+              page: capturedPages.length + 1
+            })
           }
+
+          setStreamingPages([...capturedPages])
 
           if (pageData.image) {
             capturedImages = {
@@ -243,29 +253,26 @@ const GenerateStory = () => {
               [pageData.page - 1]: true
             }))
           }
-
-          setCurrentPage(pageData.page - 1)
-          setLoading(false)
         } else if (pageData.completed) {
           setIsGenerating(false)
           setIsStreamCompleted(true)
           setCompletedFid(pageData.fid)
-          setLoading(false)
+
+          // 빈 페이지 제거 (텍스트가 있는 페이지만 남김)
+          const finalPages = capturedPages.filter(p => p.text)
+          setStreamingPages(finalPages)
 
           console.log('동화 생성 완료:', pageData.fid)
 
-          // 생성 완료 후 캐시 저장
-          if (pageData.fid && capturedTitle && capturedPages.length > 0) {
-            await saveFairyTaleMeta(pageData.fid, capturedTitle, capturedPages)
+          if (pageData.fid && capturedTitle && finalPages.length > 0) {
+            await saveFairyTaleMeta(pageData.fid, capturedTitle, finalPages)
 
-            // 이미지도 캐시에 저장
             const imageEntries = Object.entries(capturedImages)
             for (const [idx, imageData] of imageEntries) {
               await saveImage(pageData.fid, parseInt(idx), imageData as string)
             }
             console.log('캐시 저장 완료')
 
-            // 독서 상황 업데이트 (첫 페이지로 설정하여 나중에 읽을 수 있도록)
             try {
               await updateReadingProgress(storyData.uid, parseInt(pageData.fid, 10), 1)
               console.log('독서 상황 업데이트 완료: Clip 1로 설정')
@@ -277,7 +284,7 @@ const GenerateStory = () => {
           window.history.replaceState(
             {
               fromStreaming: true,
-              streamedPages: capturedPages,
+              streamedPages: finalPages,
               streamedTitle: capturedTitle,
               streamedImages: capturedImages
             },
@@ -286,13 +293,11 @@ const GenerateStory = () => {
           )
         } else if (pageData.error) {
           setIsGenerating(false)
-          setLoading(false)
           setError(pageData.error)
         }
       })
     } catch (error) {
       setIsGenerating(false)
-      setLoading(false)
       setError('동화 생성에 실패했습니다.')
       console.error('스트리밍 에러:', error)
     }
@@ -324,15 +329,12 @@ const GenerateStory = () => {
           return
         }
 
-        // 1. 먼저 캐시에서 메타데이터 확인
         const cachedMeta = await getFairyTaleMeta(currentFid)
 
-        // 2. 서버에서 동화책 데이터 가져오기
         const data = await getFairyTaleById(uid, fidNum)
         setFairyTale(data)
         setIsDataReady(true)
 
-        // 3. 캐시된 이미지 먼저 로드
         let hasAllCachedImages = true
         const imageMap: {[key: number]: string} = {}
 
@@ -351,7 +353,6 @@ const GenerateStory = () => {
           console.log(`캐시에서 ${Object.keys(imageMap).length}개 이미지 로드됨`)
         }
 
-        // 4. 캐시되지 않은 이미지가 있으면 서버에서 가져오기
         if (!hasAllCachedImages) {
           const imageFolderPath = `/content/gdrive/MyDrive/Colab Notebooks/fairyTale_images/${data.title}`
 
@@ -376,12 +377,10 @@ const GenerateStory = () => {
           }
         }
 
-        // 5. 메타데이터가 캐시에 없으면 저장
         if (!cachedMeta && data.title && data.pages) {
           await saveFairyTaleMeta(currentFid, data.title, data.pages)
         }
 
-        // 6. 이어읽기 처리
         try {
           const resumeData = await resumeReading(uid, fidNum)
           const clipNumber = resumeData?.next_page ?? 1
@@ -619,10 +618,7 @@ const GenerateStory = () => {
   const canNext = currentPage < displayPages.length - 1
 
   if (loading) {
-    const message =
-      isStreamMode && isGenerating
-        ? `페이지 ${streamingPages.length + 1} 생성 중... (이미지 포함)`
-        : '동화책을 불러오는 중...'
+    const message = '동화책을 불러오는 중...'
 
     return (
       <div className="min-h-screen bg-pink-50 font-pinkfong">
@@ -630,14 +626,9 @@ const GenerateStory = () => {
         <div className="flex items-center justify-center h-screen">
           <div className="text-center">
             <div className="text-2xl font-semibold mb-4">{message}</div>
-            {isStreamMode && streamTitle && (
-              <div className="text-lg text-gray-600">"{streamTitle}"</div>
-            )}
-            {isStreamMode && isGenerating && (
-              <div className="mt-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-4 border-pink-500 border-t-transparent mx-auto"></div>
-              </div>
-            )}
+            <div className="mt-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-4 border-pink-500 border-t-transparent mx-auto"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -688,7 +679,9 @@ const GenerateStory = () => {
         <div className="fixed top-20 left-4 bg-blue-500 text-white px-4 py-2 rounded-lg z-50 shadow-lg">
           <div className="flex items-center gap-2">
             <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-            <span>페이지 {streamingPages.length + 1} 생성 중... (텍스트 + 이미지)</span>
+            <span>
+              페이지 생성 중... ({streamingPages.filter(p => p.text).length}페이지 완료)
+            </span>
           </div>
         </div>
       )}
@@ -715,8 +708,70 @@ const GenerateStory = () => {
               ref={bookContainerRef}
               className="relative"
               onClick={handleBookClick}
-              style={{width: PAGE_W * 2, height: PAGE_H}}
+              style={{
+                width: PAGE_W * 2,
+                height: PAGE_H,
+                boxShadow: `
+                  0 4px 0 rgba(139, 92, 46, 0.15),
+                  0 8px 0 rgba(139, 92, 46, 0.12),
+                  0 12px 0 rgba(139, 92, 46, 0.09),
+                  0 16px 0 rgba(139, 92, 46, 0.06),
+                  0 20px 0 rgba(139, 92, 46, 0.03),
+                  0 24px 40px rgba(0, 0, 0, 0.2)
+                `
+              }}
               title="왼쪽 클릭: 이전 / 오른쪽 클릭: 다음">
+              {/* 종이 더미 효과 */}
+              <div className="absolute left-1 right-1 -bottom-2 pointer-events-none">
+                {[...Array(120)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="absolute left-0 right-0"
+                    style={{
+                      bottom: `${i * 4}px`,
+                      height: '2px',
+                      background: `linear-gradient(to bottom, 
+                        ${i % 2 === 0 ? '#fef3c7' : '#fde68a'}, 
+                        ${i % 2 === 0 ? '#fde68a' : '#fcd34d'})`,
+                      borderTop: '0.5px solid rgba(217, 119, 6, 0.3)',
+                      marginLeft: `${i * 1.2}px`,
+                      marginRight: `${i * 1.2}px`,
+                      boxShadow: `0 0.5px 1px rgba(120, 53, 15, ${0.2 + i * 0.01})`,
+                      opacity: 0.95,
+                      clipPath: `polygon(
+                        0 0, 
+                        45% 0, 
+                        46% ${Math.min(i * 1.5, 30)}px,
+                        47% ${Math.min(i * 2.5, 50)}px,
+                        48% ${Math.min(i * 3.5, 70)}px,
+                        49% ${Math.min(i * 4, 80)}px,
+                        50% ${Math.min(i * 5, 100)}px,
+                        51% ${Math.min(i * 4, 80)}px,
+                        52% ${Math.min(i * 3.5, 70)}px,
+                        53% ${Math.min(i * 2.5, 50)}px,
+                        54% ${Math.min(i * 1.5, 30)}px,
+                        55% 0,
+                        100% 0,
+                        100% 100%,
+                        0 100%
+                      )`
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* 중앙 제본 그림자 효과 */}
+              <div
+                className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+                style={{
+                  bottom: '-2px',
+                  width: '12px',
+                  height: `${100 * 4}px`,
+                  background:
+                    'linear-gradient(to right, rgba(80, 50, 20, 0.6), rgba(60, 40, 15, 0.8), rgba(80, 50, 20, 0.6))',
+                  boxShadow: '0 0 15px rgba(0, 0, 0, 0.4)'
+                }}
+              />
               {isDataReady && (
                 <PageFlip
                   ref={pageFlipRef}
@@ -728,16 +783,26 @@ const GenerateStory = () => {
                     const showImage = !!(
                       pageImages[idx] && imageLoadStates[idx] !== false
                     )
+                    const hasContent = !!p.text
+
                     return (
                       <div
                         key={idx}
                         className="relative bg-gradient-to-br from-amber-50 via-white to-orange-50 border-4 border-amber-200 p-8 w-[530px] h-[680px] flex flex-col shadow-2xl"
                         style={{
                           backgroundImage: `
-                          radial-gradient(circle at 20% 80%, rgba(255, 237, 213, 0.3) 0%, transparent 50%),
-                          radial-gradient(circle at 80% 20%, rgba(255, 228, 196, 0.2) 0%, transparent 50%),
-                          linear-gradient(135deg, rgba(251, 191, 36, 0.05) 0%, rgba(255, 255, 255, 0.8) 50%, rgba(251, 191, 36, 0.05) 100%)
-                        `
+                            radial-gradient(circle at 20% 80%, rgba(255, 237, 213, 0.3) 0%, transparent 50%),
+                            radial-gradient(circle at 80% 20%, rgba(255, 228, 196, 0.2) 0%, transparent 50%),
+                            linear-gradient(135deg, rgba(251, 191, 36, 0.05) 0%, rgba(255, 255, 255, 0.8) 50%, rgba(251, 191, 36, 0.05) 100%)
+                          `,
+                          boxShadow: `
+                            0 4px 0 rgba(139, 92, 46, 0.15),
+                            0 8px 0 rgba(139, 92, 46, 0.12),
+                            0 12px 0 rgba(139, 92, 46, 0.09),
+                            0 16px 0 rgba(139, 92, 46, 0.06),
+                            0 20px 0 rgba(139, 92, 46, 0.03),
+                            0 24px 40px rgba(0, 0, 0, 0.2)
+                          `
                         }}
                         data-density={
                           idx === 0 || idx === displayPages.length - 1
@@ -749,14 +814,23 @@ const GenerateStory = () => {
                         <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-300 rounded-bl-lg"></div>
                         <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-300 rounded-br-lg"></div>
 
-                        <div className="absolute top-6 right-6 text-xs text-amber-600 font-medium bg-amber-100 px-2 py-1 rounded-full">
-                          {idx + 1}
-                        </div>
+                        {hasContent && (
+                          <div className="absolute top-6 right-6 text-xs text-amber-600 font-medium bg-amber-100 px-2 py-1 rounded-full">
+                            {idx + 1}
+                          </div>
+                        )}
 
                         <div className="flex-shrink-0 mb-6 h-[480px] w-full flex justify-center">
                           <div className="relative w-[320px] h-[480px]">
                             {showImage ? (
-                              <div className="relative w-full h-full group">
+                              <div
+                                className="relative w-full h-full group"
+                                style={{
+                                  animation:
+                                    isStreamMode && isGenerating
+                                      ? 'fadeIn 0.8s ease-in-out'
+                                      : 'none'
+                                }}>
                                 <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 to-orange-400/20 rounded-xl transform rotate-1 group-hover:rotate-2 transition-transform duration-300"></div>
                                 <img
                                   src={pageImages[idx]}
@@ -766,7 +840,7 @@ const GenerateStory = () => {
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/5 via-transparent to-white/10 rounded-xl pointer-events-none"></div>
                               </div>
-                            ) : (
+                            ) : hasContent ? (
                               <div className="w-full h-full rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-dashed border-amber-300 flex items-center justify-center">
                                 <div className="text-amber-400">
                                   <svg
@@ -776,19 +850,24 @@ const GenerateStory = () => {
                                     <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
                                   </svg>
                                   <p className="text-sm text-amber-500">
-                                    {isGenerating
-                                      ? '이미지 생성 중...'
-                                      : '이미지 로딩중...'}
+                                    이미지 생성 중...
                                   </p>
                                 </div>
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         </div>
 
                         <div className="flex-1 flex items-start justify-center px-4">
-                          {p.text ? (
-                            <div className="relative max-w-[400px]">
+                          {hasContent ? (
+                            <div
+                              className="relative max-w-[400px]"
+                              style={{
+                                animation:
+                                  isStreamMode && isGenerating
+                                    ? 'fadeIn 0.8s ease-in-out'
+                                    : 'none'
+                              }}>
                               <div className="absolute -inset-4 bg-gradient-to-r from-amber-50/50 via-white/30 to-orange-50/50 rounded-2xl"></div>
                               <p className="relative text-base leading-7 text-gray-800 text-center font-pinkfong tracking-wide">
                                 {p.text}
@@ -800,16 +879,10 @@ const GenerateStory = () => {
                           ) : (
                             <div className="flex flex-col items-center justify-center text-amber-400">
                               <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-3">
-                                <span className="text-lg font-bold text-amber-600">
-                                  {idx + 1}
-                                </span>
+                                <div className="animate-spin rounded-full h-6 w-6 border-2 border-amber-600 border-t-transparent"></div>
                               </div>
                               <p className="text-lg font-semibold font-pinkfong">
-                                {isGenerating
-                                  ? '내용 생성 중...'
-                                  : showImage
-                                  ? ''
-                                  : '내용을 준비중입니다'}
+                                페이지 생성 중...
                               </p>
                             </div>
                           )}
@@ -916,6 +989,19 @@ const GenerateStory = () => {
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }
