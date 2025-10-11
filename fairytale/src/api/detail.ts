@@ -2,6 +2,7 @@ import axios from 'axios'
 import {getAllImages} from './image'
 
 const API_BASE = process.env.REACT_APP_BE_API_BASE
+const IMAGE_BASE_PATH = process.env.REACT_APP_IMAGE_BASE_PATH
 
 // 동화책 상세정보 조회 (백엔드 엔드포인트에 맞게 수정)
 export async function getFairyTaleDetail(uid: number, fid: number) {
@@ -55,7 +56,7 @@ export async function getFairyTaleDetail(uid: number, fid: number) {
     let finalImageUrl = null
 
     if (data.title) {
-      const imageFolderPath = `/content/gdrive/MyDrive/Colab Notebooks/fairyTale_images/${data.title}`
+      const imageFolderPath = `${IMAGE_BASE_PATH}/${data.title}`
       try {
         const imagesData = await getAllImages(imageFolderPath)
         if (imagesData && imagesData.images.length > 0) {

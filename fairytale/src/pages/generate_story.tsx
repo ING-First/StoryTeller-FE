@@ -17,6 +17,8 @@ import {
   clearOldCache
 } from '../utils/storyCache'
 
+const IMAGE_BASE_PATH = process.env.REACT_APP_IMAGE_BASE_PATH
+
 const PAGE_W = 530
 const PAGE_H = 680
 
@@ -373,7 +375,7 @@ const GenerateStory = () => {
         }
 
         if (!hasAllCachedImages) {
-          const imageFolderPath = `/content/gdrive/MyDrive/Colab Notebooks/fairyTale_images/${data.title}`
+          const imageFolderPath = `${IMAGE_BASE_PATH}/${data.title}`
 
           try {
             const imagesData = await getAllImages(imageFolderPath)
