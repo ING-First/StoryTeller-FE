@@ -475,11 +475,13 @@ const GenerateStory = () => {
         audioRef.current = null
       }
 
+      const storedVoiceId = localStorage.getItem('voice_id') || undefined
+      
       const response = await readFairyTalePage(
         uid,
         parseInt(currentFid, 10),
         pageIndex + 1,
-        'eleven_labs_default'
+        storedVoiceId
       )
 
       if (!(response instanceof Blob)) {

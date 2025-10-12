@@ -6,7 +6,7 @@ export async function readFairyTalePage(
   uid: number,
   fid: number,
   page: number,
-  voice_id: string
+  voice_id?: string
 ) {
   const token = localStorage.getItem('token')
   const tokenType = localStorage.getItem('token_type') || 'bearer'
