@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
+
 
 const Header = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -9,9 +11,34 @@ const Header = () => {
   useEffect(() => {
     const token = localStorage.getItem("token");
     const name = localStorage.getItem("name");
+
     if (token && name) {
-      setIsLoggedIn(true);
-      setUsername(name);
+      try {
+        const decoded = jwtDecode(token);
+        const now = Date.now() / 1000; // 초 단위
+
+        if (decoded.exp && decoded.exp < now) {
+          // 토큰 만료됨
+          alert('로그인 세션이 만료되었습니다. 다시 로그인해주세요.')
+          handleLogout();
+        } else {
+          setIsLoggedIn(true);
+          setUsername(name);
+
+          // 만료되기 직전에 자동 로그아웃 예약
+          const timeout = decoded.exp
+            ? (decoded.exp - now) * 1000
+            : 0;
+          const timer = setTimeout(() => {
+            handleLogout();
+          }, timeout);
+
+          return () => clearTimeout(timer);
+        }
+      } catch (error) {
+        console.error("토큰 파싱 실패:", error);
+        handleLogout();
+      }
     }
   }, []);
 
