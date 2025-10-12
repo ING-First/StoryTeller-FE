@@ -26,9 +26,10 @@ export async function readFairyTalePage(
         responseType: 'blob'
       }
     )
-    return res.data
+    const blob = new Blob([res.data], { type: 'audio/wav' })
+    return blob
   } catch (error: any) {
-    console.error('동화책 읽기 API 실패:', error.response?.data || error.message)
+    console.error('readFairyTalePage 실패:', error.response?.data || error.message)
     throw error
   }
 }
