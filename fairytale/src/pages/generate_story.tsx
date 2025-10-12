@@ -476,7 +476,7 @@ const GenerateStory = () => {
       }
 
       const storedVoiceId = localStorage.getItem('voice_id') || undefined
-      
+
       const response = await readFairyTalePage(
         uid,
         parseInt(currentFid, 10),
@@ -904,11 +904,11 @@ const GenerateStory = () => {
                                 <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent"></div>
                               </div>
                             </div>
-                          ) : isDummyDuringStream || p.text === '' ? (
-                            // ✅ 더미 페이지 or 빈 텍스트 페이지는 완전히 빈 면
+                          ) : isDummyDuringStream || p.text === '' || pageImages[idx] ? (
+                            // ✅ 더미 페이지, 빈 텍스트, 또는 이미지만 있을 때는 완전 빈 화면
                             <div className="w-full h-full bg-transparent" />
                           ) : (
-                            // ✅ 일반 생성 중 페이지는 그대로 스피너 표시
+                            // ⚠️ 그 외 경우만 "페이지 생성 중..." 스피너 표시
                             <div className="flex flex-col items-center justify-center text-amber-400">
                               <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-3">
                                 <div className="animate-spin rounded-full h-6 w-6 border-2 border-amber-600 border-t-transparent"></div>
