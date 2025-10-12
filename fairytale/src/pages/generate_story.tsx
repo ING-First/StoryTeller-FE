@@ -489,7 +489,7 @@ const GenerateStory = () => {
         return
       }
 
-      const audioUrl = URL.createObjectURL(response)
+      const audioUrl = URL.createObjectURL(new Blob([response], { type: 'audio/wav' }))
       const audio = new Audio(audioUrl)
       audioRef.current = audio
 
