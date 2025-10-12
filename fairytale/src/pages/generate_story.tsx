@@ -489,7 +489,7 @@ const GenerateStory = () => {
         return
       }
 
-      const audioUrl = URL.createObjectURL(new Blob([response], { type: 'audio/wav' }))
+      const audioUrl = URL.createObjectURL(new Blob([response], {type: 'audio/wav'}))
       const audio = new Audio(audioUrl)
       audioRef.current = audio
 
@@ -935,6 +935,10 @@ const GenerateStory = () => {
               <div className="absolute -right-16 bottom-4 flex flex-col items-center gap-4">
                 <button
                   onClick={() => {
+                    if (isStreamMode && !isStreamCompleted) {
+                      alert('스트리밍 완료 후에 음성 재생이 가능합니다.')
+                      return
+                    }
                     if (isPlaying && playingPage === currentPage) stopAudio()
                     else playPageAudio(currentPage)
                   }}
@@ -956,8 +960,14 @@ const GenerateStory = () => {
                 </button>
 
                 <button
-                  onClick={stopAudio}
-                  disabled={!isPlaying}
+                  onClick={() => {
+                    if (isStreamMode && !isStreamCompleted) {
+                      alert('스트리밍 완료 후에 음성 재생이 가능합니다.')
+                      return
+                    }
+                    stopAudio()
+                  }}
+                  disabled={!isPlaying || (isStreamMode && !isStreamCompleted)}
                   aria-label="정지"
                   className="w-12 h-12 rounded-full bg-white border border-gray-300 shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">

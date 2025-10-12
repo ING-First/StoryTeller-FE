@@ -1,7 +1,7 @@
 // src/components/VoiceRecorder.tsx
 import React, {useState, useEffect, useRef} from 'react'
 import Button from './Button' // 버튼 컴포넌트 재사용
-import { voice_register } from "../api/voice_register";
+import {voice_register} from '../api/voice_register'
 
 const VoiceRecorder = () => {
   const [isRecording, setIsRecording] = useState(false)
@@ -31,51 +31,52 @@ const VoiceRecorder = () => {
 
   const handleToggleRecording = async () => {
     if (!isRecording) {
-      setTimer(0);
+      setTimer(0)
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-        audioChunksRef.current = [];
+        const stream = await navigator.mediaDevices.getUserMedia({audio: true})
+        const mediaRecorder = new MediaRecorder(stream)
+        mediaRecorderRef.current = mediaRecorder
+        audioChunksRef.current = []
 
-        mediaRecorder.ondataavailable = (event) => {
+        mediaRecorder.ondataavailable = event => {
           if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
+            audioChunksRef.current.push(event.data)
           }
-        };
+        }
 
         mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-          const file = new File([audioBlob], "recording.webm", { type: "audio/webm" });
+          const audioBlob = new Blob(audioChunksRef.current, {type: 'audio/webm'})
+          const file = new File([audioBlob], 'recording.webm', {type: 'audio/webm'})
 
           try {
             setLoading(true)
             const res = await voice_register({
-              uid: localStorage.uid,
-              audio: file,
-            });
-            console.log(res);
+              uid: Number(localStorage.uid),
+              audio: file
+            })
+            console.log('API 응답:', res)
             alert(res.message)
-            window.location.href = "/"
-          } catch (err) {
-            console.error(err);
-            alert("목소리 등록을 실패했습니다.")
-            window.location.reload()
+            window.location.href = '/'
+          } catch (err: any) {
+            console.error('목소리 등록 에러:', err)
+            const errorMessage =
+              err.response?.data?.detail || '목소리 등록을 실패했습니다.'
+            alert(errorMessage)
           } finally {
             setLoading(false)
           }
-        };
+        }
 
-        mediaRecorder.start();
-        setIsRecording(true);
+        mediaRecorder.start()
+        setIsRecording(true)
       } catch (err) {
-        console.error("마이크 접근 실패");
+        console.error('마이크 접근 실패')
       }
     } else {
-      mediaRecorderRef.current?.stop();
-      setIsRecording(false);
+      mediaRecorderRef.current?.stop()
+      setIsRecording(false)
     }
-  };
+  }
 
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60)
