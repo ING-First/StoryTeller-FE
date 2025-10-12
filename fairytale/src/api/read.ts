@@ -12,9 +12,12 @@ export async function readFairyTalePage(
   const tokenType = localStorage.getItem('token_type') || 'bearer'
 
   try {
+    const payload: any = { page }
+    if (voice_id) payload.voice_id = voice_id
+
     const res = await axios.post(
       `${API_BASE}/users/${uid}/fairy_tales/${fid}/read`,
-      {page, voice_id},
+      payload,
       {
         headers: {
           Authorization: `${tokenType} ${token}`,
