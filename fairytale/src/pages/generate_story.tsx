@@ -476,7 +476,7 @@ const GenerateStory = () => {
       }
 
       const storedVoiceId = localStorage.getItem('voice_id') || undefined
-      
+
       const response = await readFairyTalePage(
         uid,
         parseInt(currentFid, 10),
@@ -489,7 +489,7 @@ const GenerateStory = () => {
         return
       }
 
-      const audioUrl = URL.createObjectURL(new Blob([response], { type: 'audio/wav' }))
+      const audioUrl = URL.createObjectURL(new Blob([response], {type: 'audio/wav'}))
       const audio = new Audio(audioUrl)
       audioRef.current = audio
 
@@ -904,11 +904,11 @@ const GenerateStory = () => {
                                 <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent"></div>
                               </div>
                             </div>
-                          ) : isDummyDuringStream || p.text === '' ? (
-                            // ✅ 더미 페이지 or 빈 텍스트 페이지는 완전히 빈 면
+                          ) : isDummyDuringStream || p.text === '' || pageImages[idx] ? (
+                            // ✅ 더미 페이지, 빈 텍스트, 또는 이미지만 있을 때는 완전 빈 화면
                             <div className="w-full h-full bg-transparent" />
                           ) : (
-                            // ✅ 일반 생성 중 페이지는 그대로 스피너 표시
+                            // ⚠️ 그 외 경우만 "페이지 생성 중..." 스피너 표시
                             <div className="flex flex-col items-center justify-center text-amber-400">
                               <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-3">
                                 <div className="animate-spin rounded-full h-6 w-6 border-2 border-amber-600 border-t-transparent"></div>
@@ -935,6 +935,10 @@ const GenerateStory = () => {
               <div className="absolute -right-16 bottom-4 flex flex-col items-center gap-4">
                 <button
                   onClick={() => {
+                    if (isStreamMode && !isStreamCompleted) {
+                      alert('스트리밍 완료 후에 음성 재생이 가능합니다.')
+                      return
+                    }
                     if (isPlaying && playingPage === currentPage) stopAudio()
                     else playPageAudio(currentPage)
                   }}
@@ -956,8 +960,14 @@ const GenerateStory = () => {
                 </button>
 
                 <button
-                  onClick={stopAudio}
-                  disabled={!isPlaying}
+                  onClick={() => {
+                    if (isStreamMode && !isStreamCompleted) {
+                      alert('스트리밍 완료 후에 음성 재생이 가능합니다.')
+                      return
+                    }
+                    stopAudio()
+                  }}
+                  disabled={!isPlaying || (isStreamMode && !isStreamCompleted)}
                   aria-label="정지"
                   className="w-12 h-12 rounded-full bg-white border border-gray-300 shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
