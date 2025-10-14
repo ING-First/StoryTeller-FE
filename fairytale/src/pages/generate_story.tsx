@@ -456,7 +456,6 @@ const GenerateStory = () => {
   const currentFid = completedFid || fid
   if (!currentFid) return
 
-  // ✅ 현재 페이지 쌍(1-2, 3-4, 5-6 ...)
   const startPage = Math.floor(pageIndex / 2) * 2
   const pagesToPlay = [startPage, startPage + 1].filter(
     idx => displayPages[idx]?.text && idx < displayPages.length
@@ -506,19 +505,21 @@ const GenerateStory = () => {
       const audio = new Audio(audioUrl)
       audioRef.current = audio
 
-      audio.onended = async () => {
-        URL.revokeObjectURL(audioUrl)
-        await playSequentially(idx + 1) 
-      }
+      await new Promise<void>((resolve, reject) => {
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl)
+          resolve()
+        }
 
-      audio.onerror = () => {
-        setIsPlaying(false)
-        setPlayingPage(null)
-        URL.revokeObjectURL(audioUrl)
-        alert('음성 재생에 실패했습니다.')
-      }
+        audio.onerror = (e) => {
+          URL.revokeObjectURL(audioUrl)
+          reject(e)
+        }
 
-      await audio.play()
+        audio.play().catch(reject)
+      })
+
+      await playSequentially(idx + 1)
     }
 
     await playSequentially(0)
