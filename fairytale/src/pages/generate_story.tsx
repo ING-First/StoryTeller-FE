@@ -111,7 +111,7 @@ const GenerateStory = () => {
     setUid(uidNum)
   }, [])
 
-  const isStreamMode = !fid
+  const isStreamMode = fid === undefined
 
   // 현재 페이지를 ref에 동기화
   useEffect(() => {
@@ -332,7 +332,7 @@ const GenerateStory = () => {
       try {
         setLoading(true)
 
-        const navigationState = navigate.length ? null : window.history.state?.usr
+        const navigationState = window.history.state
 
         if (navigationState?.fromStreaming) {
           setStreamingPages(navigationState.streamedPages || [])
@@ -477,27 +477,42 @@ const GenerateStory = () => {
 
       const storedVoiceId = localStorage.getItem('voice_id') || undefined
 
+      const pagesToPlay = [pageIndex, pageIndex + 1].filter(
+        idx => pages[idx]?.text && idx < pages.length
+      )
+
+      const playSequentially = async (idx: number) => {
+        if (idx >= pagesToPlay.length) {
+          setIsPlaying(false)
+          setPlayingPage(null)
+          return
+        }
+
+      const currentIdx = pagesToPlay[idx]
+      
       const response = await readFairyTalePage(
         uid,
         parseInt(currentFid, 10),
-        pageIndex + 1,
-        storedVoiceId
+        currentIdx + 1, 
+        storedVoiceId,
       )
 
       if (!(response instanceof Blob)) {
         console.warn('Unexpected response type:', typeof response)
+        setIsPlaying(false)
+        setPlayingPage(null)
         return
       }
 
-      const audioUrl = URL.createObjectURL(new Blob([response], {type: 'audio/wav'}))
+      const audioUrl = URL.createObjectURL(new Blob([response], { type: 'audio/wav' }))
       const audio = new Audio(audioUrl)
       audioRef.current = audio
 
-      audio.onended = () => {
-        setIsPlaying(false)
-        setPlayingPage(null)
+      audio.onended = async () => {
         URL.revokeObjectURL(audioUrl)
+        await playSequentially(idx + 1) 
       }
+
       audio.onerror = () => {
         setIsPlaying(false)
         setPlayingPage(null)
@@ -506,6 +521,8 @@ const GenerateStory = () => {
       }
 
       await audio.play()
+      }
+      await playSequentially(0)
     } catch (e) {
       console.error('음성 재생 실패:', e)
       setIsPlaying(false)
@@ -516,6 +533,8 @@ const GenerateStory = () => {
 
   const stopAudio = () => {
     if (audioRef.current) {
+      audioRef.current.onended = null
+      if (audioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(audioRef.current.src)
       audioRef.current.pause()
       audioRef.current = null
     }
@@ -575,7 +594,7 @@ const GenerateStory = () => {
     let newPage = currentPage
 
     if (x > half && currentPage < lastIndex) {
-      newPage = Math.min(currentPage + 1, lastIndex)
+      newPage = Math.min(currentPage + 2, lastIndex)
       setCurrentPage(newPage)
       stopAudio()
     } else if (x <= half && currentPage > 0) {
@@ -592,7 +611,7 @@ const GenerateStory = () => {
   const goToPrevPage = () => {
     if (!canPrev || !pageFlipRef.current) return
 
-    const newPage = Math.max(currentPage - 1, 0)
+    const newPage = Math.max(currentPage - 2, 0)
     setCurrentPage(newPage)
     stopAudio()
     debouncedUpdateProgress(newPage)
@@ -904,11 +923,11 @@ const GenerateStory = () => {
                                 <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent"></div>
                               </div>
                             </div>
-                          ) : isDummyDuringStream || p.text === '' || pageImages[idx] ? (
-                            // ✅ 더미 페이지, 빈 텍스트, 또는 이미지만 있을 때는 완전 빈 화면
+                          ) : isDummyDuringStream || p.text === '' ? (
+                            // ✅ 더미 페이지 or 빈 텍스트 페이지는 완전히 빈 면
                             <div className="w-full h-full bg-transparent" />
                           ) : (
-                            // ⚠️ 그 외 경우만 "페이지 생성 중..." 스피너 표시
+                            // ✅ 일반 생성 중 페이지는 그대로 스피너 표시
                             <div className="flex flex-col items-center justify-center text-amber-400">
                               <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-3">
                                 <div className="animate-spin rounded-full h-6 w-6 border-2 border-amber-600 border-t-transparent"></div>
@@ -935,10 +954,6 @@ const GenerateStory = () => {
               <div className="absolute -right-16 bottom-4 flex flex-col items-center gap-4">
                 <button
                   onClick={() => {
-                    if (isStreamMode && !isStreamCompleted) {
-                      alert('스트리밍 완료 후에 음성 재생이 가능합니다.')
-                      return
-                    }
                     if (isPlaying && playingPage === currentPage) stopAudio()
                     else playPageAudio(currentPage)
                   }}
@@ -960,14 +975,8 @@ const GenerateStory = () => {
                 </button>
 
                 <button
-                  onClick={() => {
-                    if (isStreamMode && !isStreamCompleted) {
-                      alert('스트리밍 완료 후에 음성 재생이 가능합니다.')
-                      return
-                    }
-                    stopAudio()
-                  }}
-                  disabled={!isPlaying || (isStreamMode && !isStreamCompleted)}
+                  onClick={stopAudio}
+                  disabled={!isPlaying}
                   aria-label="정지"
                   className="w-12 h-12 rounded-full bg-white border border-gray-300 shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
