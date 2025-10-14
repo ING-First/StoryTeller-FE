@@ -452,49 +452,45 @@ const GenerateStory = () => {
   }
 
   const playPageAudio = async (pageIndex: number) => {
-    const pages = displayPages
-    if (!pages[pageIndex]?.text || !uid) return
+  if (!uid) return
+  const currentFid = completedFid || fid
+  if (!currentFid) return
 
-    if (isStreamMode && !isStreamCompleted) {
-      alert('동화 생성이 완료된 후 음성을 들을 수 있습니다.')
-      return
+  // ✅ 현재 페이지 쌍(1-2, 3-4, 5-6 ...)
+  const startPage = Math.floor(pageIndex / 2) * 2
+  const pagesToPlay = [startPage, startPage + 1].filter(
+    idx => displayPages[idx]?.text && idx < displayPages.length
+  )
+
+  if (isStreamMode && !isStreamCompleted) {
+    alert('동화 생성이 완료된 후 음성을 들을 수 있습니다.')
+    return
+  }
+
+  try {
+    setIsPlaying(true)
+    setPlayingPage(pageIndex)
+
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
     }
 
-    const currentFid = completedFid || fid
-    if (!currentFid) {
-      alert('음성 재생을 위한 정보가 부족합니다.')
-      return
-    }
+    const storedVoiceId = localStorage.getItem('voice_id') || undefined
 
-    try {
-      setIsPlaying(true)
-      setPlayingPage(pageIndex)
-
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current = null
+    const playSequentially = async (idx: number) => {
+      if (idx >= pagesToPlay.length) {
+        setIsPlaying(false)
+        setPlayingPage(null)
+        return
       }
 
-      const storedVoiceId = localStorage.getItem('voice_id') || undefined
-
-      const pagesToPlay = [pageIndex, pageIndex + 1].filter(
-        idx => pages[idx]?.text && idx < pages.length
-      )
-
-      const playSequentially = async (idx: number) => {
-        if (idx >= pagesToPlay.length) {
-          setIsPlaying(false)
-          setPlayingPage(null)
-          return
-        }
-
       const currentIdx = pagesToPlay[idx]
-      
       const response = await readFairyTalePage(
         uid,
         parseInt(currentFid, 10),
-        currentIdx + 1, 
-        storedVoiceId,
+        currentIdx + 1,
+        storedVoiceId
       )
 
       if (!(response instanceof Blob)) {
@@ -504,7 +500,9 @@ const GenerateStory = () => {
         return
       }
 
-      const audioUrl = URL.createObjectURL(new Blob([response], { type: 'audio/wav' }))
+      const audioUrl = URL.createObjectURL(
+        new Blob([response], { type: 'audio/wav' })
+      )
       const audio = new Audio(audioUrl)
       audioRef.current = audio
 
@@ -521,15 +519,16 @@ const GenerateStory = () => {
       }
 
       await audio.play()
-      }
-      await playSequentially(0)
-    } catch (e) {
-      console.error('음성 재생 실패:', e)
-      setIsPlaying(false)
-      setPlayingPage(null)
-      alert('음성 재생에 실패했습니다.')
     }
+
+    await playSequentially(0)
+  } catch (e) {
+    console.error('음성 재생 실패:', e)
+    setIsPlaying(false)
+    setPlayingPage(null)
+    alert('음성 재생에 실패했습니다.')
   }
+}
 
   const stopAudio = () => {
     if (audioRef.current) {
