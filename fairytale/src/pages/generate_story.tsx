@@ -477,42 +477,50 @@ const GenerateStory = () => {
 
       const storedVoiceId = localStorage.getItem('voice_id') || undefined
 
-      const response = await readFairyTalePage(
-        uid,
-        parseInt(currentFid, 10),
-        pageIndex + 1,
-        storedVoiceId
-      )
+      const blob = await readFairyTalePage(
+      uid,
+      parseInt(currentFid, 10),
+      pageIndex + 1,
+      storedVoiceId
+    )
 
-      if (!(response instanceof Blob)) {
-        console.warn('Unexpected response type:', typeof response)
-        return
-      }
-
-      const audioUrl = URL.createObjectURL(new Blob([response], {type: 'audio/wav'}))
-      const audio = new Audio(audioUrl)
-      audioRef.current = audio
-
-      audio.onended = () => {
-        setIsPlaying(false)
-        setPlayingPage(null)
-        URL.revokeObjectURL(audioUrl)
-      }
-      audio.onerror = () => {
-        setIsPlaying(false)
-        setPlayingPage(null)
-        URL.revokeObjectURL(audioUrl)
-        alert('음성 재생에 실패했습니다.')
-      }
-
-      await audio.play()
-    } catch (e) {
-      console.error('음성 재생 실패:', e)
+    if (!(blob instanceof Blob)) {
+      console.warn('Unexpected response type:', typeof blob)
       setIsPlaying(false)
       setPlayingPage(null)
+      return
+    }
+
+    // Blob을 URL로 변환 후 Audio 재생
+    const audioUrl = URL.createObjectURL(blob)
+    const audio = new Audio(audioUrl)
+    audioRef.current = audio
+
+    console.log('[DEBUG] 오디오 재생 시작:', audioUrl)
+
+    audio.onended = () => {
+      setIsPlaying(false)
+      setPlayingPage(null)
+      URL.revokeObjectURL(audioUrl)
+    }
+
+    audio.onerror = (err) => {
+      console.error('[ERROR] 오디오 재생 오류:', err)
+      setIsPlaying(false)
+      setPlayingPage(null)
+      URL.revokeObjectURL(audioUrl)
       alert('음성 재생에 실패했습니다.')
     }
+
+    // 재생
+    await audio.play()
+  } catch (e) {
+    console.error('음성 재생 실패:', e)
+    setIsPlaying(false)
+    setPlayingPage(null)
+    alert('음성 재생에 실패했습니다.')
   }
+}
 
   const stopAudio = () => {
     if (audioRef.current) {
