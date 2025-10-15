@@ -10,6 +10,18 @@ const VoiceRecorder = () => {
   const audioChunksRef = useRef<Blob[]>([])
   const [loading, setLoading] = useState(false)
 
+  const getSupportedMimeType = () => {
+    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus'))
+      return 'audio/webm;codecs=opus'
+    if (MediaRecorder.isTypeSupported('audio/mp4;codecs=aac'))
+      return 'audio/mp4;codecs=aac'
+    if (MediaRecorder.isTypeSupported('audio/mp4'))
+      return 'audio/mp4'
+    if (MediaRecorder.isTypeSupported('audio/ogg;codecs=vorbis'))
+      return 'audio/ogg;codecs=vorbis'
+    return ''
+  }
+  
   // 타이머 로직
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null
@@ -34,19 +46,26 @@ const VoiceRecorder = () => {
       setTimer(0)
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const mediaRecorder = new MediaRecorder(stream)
+        const mimeType = getSupportedMimeType()
+        const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
         mediaRecorderRef.current = mediaRecorder
         audioChunksRef.current = []
 
-        mediaRecorder.ondataavailable = event => {
-          if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data)
-          }
+        mediaRecorder.ondataavailable = e => {
+          if (e.data.size > 0) audioChunksRef.current.push(e.data)
         }
 
         mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-          const file = new File([audioBlob], 'recording.webm', { type: 'audio/webm' })
+          stream.getTracks().forEach(track => track.stop());
+          const mime = mimeType || 'audio/webm'
+          const ext = mime.includes('mp4')
+            ? 'mp4'
+            : mime.includes('ogg')
+            ? 'ogg'
+            : 'webm'
+
+          const audioBlob = new Blob(audioChunksRef.current, { type: mime })
+          const file = new File([audioBlob], `recording.${ext}`, { type: mime })
 
           try {
             setLoading(true)
@@ -59,9 +78,7 @@ const VoiceRecorder = () => {
             window.location.href = '/'
           } catch (err: any) {
             console.error('목소리 등록 에러:', err)
-            const errorMessage =
-              err.response?.data?.detail || '목소리 등록을 실패했습니다.'
-            alert(errorMessage)
+            alert(err.response?.data?.detail || '목소리 등록을 실패했습니다.')
           } finally {
             setLoading(false)
           }
@@ -70,7 +87,8 @@ const VoiceRecorder = () => {
         mediaRecorder.start()
         setIsRecording(true)
       } catch (err) {
-        console.error('마이크 접근 실패')
+        console.error('마이크 접근 실패:', err)
+        alert('마이크 접근 권한이 필요합니다.')
       }
     } else {
       mediaRecorderRef.current?.stop()
@@ -78,12 +96,10 @@ const VoiceRecorder = () => {
     }
   }
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60)
-      .toString()
-      .padStart(2, '0')
-    const seconds = (time % 60).toString().padStart(2, '0')
-    return `${minutes}:${seconds}`
+  const formatTime = (t: number) => {
+    const m = Math.floor(t / 60).toString().padStart(2, '0')
+    const s = (t % 60).toString().padStart(2, '0')
+    return `${m}:${s}`
   }
 
   return (
