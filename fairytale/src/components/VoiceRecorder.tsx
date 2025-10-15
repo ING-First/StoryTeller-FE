@@ -3,19 +3,12 @@ import React, { useState, useEffect, useRef } from 'react'
 import Button from './Button'
 import { voice_register } from '../api/voice_register'
 
-// 🎯 브라우저별 지원 MIME 타입 자동 선택
+// 지원 가능한 MIME 타입 자동 탐색
 const pickSupportedMime = (): string => {
-  const userAgent = navigator.userAgent.toLowerCase()
-
-  // Safari 전용 분기 (WebM 미지원)
-  if (userAgent.includes('safari') && !userAgent.includes('chrome')) {
-    return 'audio/mp4;codecs=mp4a.40.2'
-  }
-
   const candidates = [
     'audio/webm;codecs=opus',   // Chrome / Edge
     'audio/webm',               // 구형 브라우저
-    'audio/mp4;codecs=mp4a.40.2' // Safari fallback
+    'audio/mp4;codecs=mp4a.40.2' // Safari (WebM 미지원)
   ]
   const isSupported = (t: string) =>
     (window as any).MediaRecorder?.isTypeSupported?.(t)
@@ -30,28 +23,26 @@ const VoiceRecorder: React.FC = () => {
   const audioChunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
 
-  // ⏱ 타이머 동작
+  // 타이머 동작
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null
     if (isRecording) {
       interval = setInterval(() => setTimer((prev) => prev + 1), 1000)
+    } else if (!isRecording && timer !== 0) {
+      if (interval) clearInterval(interval)
     }
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [isRecording])
+  }, [isRecording, timer])
 
-  // 🎙️ 녹음 시작 / 종료
+  // 녹음 시작 / 종료 토글
   const handleToggleRecording = async () => {
     if (!isRecording) {
       setTimer(0)
       try {
         // 마이크 접근
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        console.log('🎤 Tracks:', stream.getAudioTracks())
-        const track = stream.getAudioTracks()[0]
-        console.log('🎤 enabled:', track.enabled, 'muted:', (track as any).muted)
-
         streamRef.current = stream
 
         const mimeType = pickSupportedMime()
@@ -59,21 +50,17 @@ const VoiceRecorder: React.FC = () => {
           ? new MediaRecorder(stream, { mimeType })
           : new MediaRecorder(stream)
 
-        console.log('[REC] 🎤 chosen mimeType:', mimeType || mediaRecorder.mimeType)
-        console.log('[REC] 🎤 stream tracks:', stream.getAudioTracks())
+        console.log('[REC] chosen mimeType:', mimeType || mediaRecorder.mimeType)
 
         mediaRecorderRef.current = mediaRecorder
         audioChunksRef.current = []
 
-        // 오디오 조각 수집
         mediaRecorder.ondataavailable = (event) => {
-          if (event.data && event.data.size > 0) {
+          if (event.data.size > 0) {
             audioChunksRef.current.push(event.data)
-            console.log('[REC] chunk received:', event.data.size)
           }
         }
 
-        // 녹음 종료 후 처리
         mediaRecorder.onstop = async () => {
           const finalType =
             mimeType || mediaRecorderRef.current?.mimeType || 'application/octet-stream'
@@ -82,19 +69,9 @@ const VoiceRecorder: React.FC = () => {
           const fileName = `recording.${ext}`
           const file = new File([audioBlob], fileName, { type: finalType })
 
-          console.log('[REC] ✅ blob.type:', audioBlob.type)
-          console.log('[REC] ✅ blob.size:', audioBlob.size)
-          console.log('[REC] ✅ blob.length:', audioChunksRef.current.length)
-
-          if (audioBlob.size === 0) {
-            alert('⚠️ 녹음된 오디오가 없습니다. 마이크 설정을 확인해주세요.')
-            return
-          }
-
-          // (선택) 재생 테스트
-          const audioURL = URL.createObjectURL(audioBlob)
-          const preview = new Audio(audioURL)
-          preview.play().catch(() => console.warn('자동 재생 차단됨'))
+          console.log('[REC] blob.type:', audioBlob.type)
+          console.log('[REC] blob.size:', audioBlob.size)
+          console.log('[REC] file.name:', file.name)
 
           try {
             setLoading(true)
@@ -104,7 +81,7 @@ const VoiceRecorder: React.FC = () => {
             alert(res.message || '사용자 음성 등록 성공 🎉')
             window.location.href = '/'
           } catch (err: any) {
-            console.error('❌ 목소리 등록 에러:', err)
+            console.error('목소리 등록 에러:', err)
             const errorMessage =
               err?.response?.data?.detail || '목소리 등록을 실패했습니다.'
             alert(errorMessage)
@@ -114,12 +91,11 @@ const VoiceRecorder: React.FC = () => {
           }
         }
 
-        // 💡 1초마다 chunk 저장 (무음 방지 핵심)
-        mediaRecorder.start(1000)
+        mediaRecorder.start()
         setIsRecording(true)
       } catch (err) {
-        console.error('❌ 마이크 접근 실패:', err)
-        alert('마이크 접근에 실패했습니다. 브라우저 설정에서 마이크 권한을 허용해주세요.')
+        console.error('마이크 접근 실패:', err)
+        alert('마이크 접근에 실패했습니다. 브라우저 설정을 확인해주세요.')
       }
     } else {
       mediaRecorderRef.current?.stop()
@@ -127,7 +103,6 @@ const VoiceRecorder: React.FC = () => {
     }
   }
 
-  // ⏱ 시간 포맷팅
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60)
       .toString()
