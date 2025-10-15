@@ -1,76 +1,101 @@
 // src/components/VoiceRecorder.tsx
 import React, { useState, useEffect, useRef } from 'react'
-import Button from './Button' // 버튼 컴포넌트 재사용
+import Button from './Button'
 import { voice_register } from '../api/voice_register'
 
-const VoiceRecorder = () => {
+// 지원 가능한 MIME 타입 자동 탐색
+const pickSupportedMime = (): string => {
+  const candidates = [
+    'audio/webm;codecs=opus',   // Chrome / Edge
+    'audio/webm',               // 구형 브라우저
+    'audio/mp4;codecs=mp4a.40.2' // Safari (WebM 미지원)
+  ]
+  const isSupported = (t: string) =>
+    (window as any).MediaRecorder?.isTypeSupported?.(t)
+  return candidates.find(isSupported) || ''
+}
+
+const VoiceRecorder: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false)
   const [timer, setTimer] = useState(0)
+  const [loading, setLoading] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
-  const [loading, setLoading] = useState(false)
+  const streamRef = useRef<MediaStream | null>(null)
 
-  // 타이머 로직
+  // 타이머 동작
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null
     if (isRecording) {
-      interval = setInterval(() => {
-        setTimer(prevTimer => prevTimer + 1)
-      }, 1000)
+      interval = setInterval(() => setTimer((prev) => prev + 1), 1000)
     } else if (!isRecording && timer !== 0) {
-      if (interval) {
-        clearInterval(interval)
-      }
+      if (interval) clearInterval(interval)
     }
     return () => {
-      if (interval) {
-        clearInterval(interval)
-      }
+      if (interval) clearInterval(interval)
     }
   }, [isRecording, timer])
 
+  // 녹음 시작 / 종료 토글
   const handleToggleRecording = async () => {
     if (!isRecording) {
       setTimer(0)
       try {
+        // 마이크 접근
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const mediaRecorder = new MediaRecorder(stream)
+        streamRef.current = stream
+
+        const mimeType = pickSupportedMime()
+        const mediaRecorder = mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream)
+
+        console.log('[REC] chosen mimeType:', mimeType || mediaRecorder.mimeType)
+
         mediaRecorderRef.current = mediaRecorder
         audioChunksRef.current = []
 
-        mediaRecorder.ondataavailable = event => {
+        mediaRecorder.ondataavailable = (event) => {
           if (event.data.size > 0) {
             audioChunksRef.current.push(event.data)
           }
         }
 
         mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-          const file = new File([audioBlob], 'recording.webm', { type: 'audio/webm' })
+          const finalType =
+            mimeType || mediaRecorderRef.current?.mimeType || 'application/octet-stream'
+          const audioBlob = new Blob(audioChunksRef.current, { type: finalType })
+          const ext = audioBlob.type.includes('mp4') ? 'm4a' : 'webm'
+          const fileName = `recording.${ext}`
+          const file = new File([audioBlob], fileName, { type: finalType })
+
+          console.log('[REC] blob.type:', audioBlob.type)
+          console.log('[REC] blob.size:', audioBlob.size)
+          console.log('[REC] file.name:', file.name)
 
           try {
             setLoading(true)
-            const res = await voice_register({
-              uid: Number(localStorage.uid),
-              audio: file
-            })
+            const uid = Number(localStorage.getItem('uid') || 0)
+            const res = await voice_register({ uid, audio: file })
             console.log('API 응답:', res)
-            alert(res.message)
+            alert(res.message || '사용자 음성 등록 성공 🎉')
             window.location.href = '/'
           } catch (err: any) {
             console.error('목소리 등록 에러:', err)
             const errorMessage =
-              err.response?.data?.detail || '목소리 등록을 실패했습니다.'
+              err?.response?.data?.detail || '목소리 등록을 실패했습니다.'
             alert(errorMessage)
           } finally {
             setLoading(false)
+            stream.getTracks().forEach((t) => t.stop())
           }
         }
 
         mediaRecorder.start()
         setIsRecording(true)
       } catch (err) {
-        console.error('마이크 접근 실패')
+        console.error('마이크 접근 실패:', err)
+        alert('마이크 접근에 실패했습니다. 브라우저 설정을 확인해주세요.')
       }
     } else {
       mediaRecorderRef.current?.stop()
@@ -89,7 +114,7 @@ const VoiceRecorder = () => {
   return (
     <section className="mt-10 p-6 bg-white rounded-2xl shadow-xl border border-gray-200">
       <div className="text-center py-10 flex flex-col items-center">
-        {/* 녹음 안내 텍스트 */}
+        {/* 안내 텍스트 */}
         <p className="font-pinkfong text-4xl font-extrabold text-gray-800 leading-tight">
           10초 이상 말씀해주세요.
         </p>
@@ -97,16 +122,20 @@ const VoiceRecorder = () => {
           ex. "안녕하세요, 저는 OOO입니다."
         </p>
 
-        {/* 녹음 파형 (임시 이미지) */}
+        {/* 녹음 파형 */}
         <div className="my-10">
-          <img src="/assets/frequency.png" alt="Voice Waveform" className="w-48 h-24" />
+          <img
+            src="/assets/frequency.png"
+            alt="Voice Waveform"
+            className="w-48 h-24"
+          />
         </div>
 
-        {/* 타이머 및 녹음 상태 */}
+        {/* 타이머 & 상태 표시 */}
         <div className="flex items-center space-x-4">
           <div
             className={`w-4 h-4 rounded-full ${
-              isRecording ? 'bg-red-500' : 'bg-gray-400'
+              isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-400'
             }`}
           ></div>
           <span className="text-red-500 text-3xl font-bold">
@@ -114,7 +143,7 @@ const VoiceRecorder = () => {
           </span>
         </div>
 
-        {/* 녹음 시작/종료 버튼 */}
+        {/* 버튼 */}
         <div className="font-pinkfong mt-10 flex justify-center space-x-20">
           <Button onClick={handleToggleRecording}>
             {isRecording ? '녹음 완료' : '녹음 시작'}
